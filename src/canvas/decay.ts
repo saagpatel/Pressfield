@@ -26,6 +26,48 @@ export function driftForLevel(level: number): number {
 	return level * 6;
 }
 
+// Knuth multiplicative constant (⌊2³²·φ⁻¹⌋) and a decorrelating salt for the
+// second axis, so dx and dy hash independently from the same word index.
+const KNUTH = 2_654_435_761;
+const DRIFT_SALT = 0x9e3779b9;
+const MAX_DRIFT_X = 12; // px lateral at level 1
+const MAX_DRIFT_Y = 4; // px vertical at level 1
+
+// Map a 32-bit hash to a signed unit offset in [-1, 1].
+function signedUnit(hash: number): number {
+	return ((hash >>> 0) / 0xffffffff) * 2 - 1;
+}
+
+// Chromatic aberration only appears in the back half of the decay, growing the
+// RGB channel split from 0 at level 0.5 to MAX_FRINGE px at full decay.
+const FRINGE_THRESHOLD = 0.5;
+const MAX_FRINGE = 2; // px of red/cyan separation at level 1
+
+// Half-width of the chromatic RGB split in CSS px: 0 below the threshold, then
+// a linear ramp to MAX_FRINGE at full decay. Faint near 0.7, prominent at 1.0.
+export function fringeForLevel(level: number): number {
+	if (level <= FRINGE_THRESHOLD) return 0;
+	return ((level - FRINGE_THRESHOLD) / (1 - FRINGE_THRESHOLD)) * MAX_FRINGE;
+}
+
+// Deterministic per-word scatter vector. Seeded on the word's index, so a word
+// always drifts the same direction across animation frames (the word list is
+// stable during an idle decay episode); magnitude scales linearly with `level`,
+// so the word slides further as decay deepens but never changes heading.
+export function driftVector(
+	index: number,
+	level: number,
+): { dx: number; dy: number } {
+	if (level <= 0) return { dx: 0, dy: 0 }; // at rest: no scatter, clean zeros
+	// Seed on (index + 1): index 0 would hash to 0 → signedUnit(0) = -1, pinning
+	// the document's first word to the hard-left extreme instead of scattering.
+	const h = (index + 1) * KNUTH;
+	return {
+		dx: signedUnit(h) * MAX_DRIFT_X * level,
+		dy: signedUnit(h ^ DRIFT_SALT) * MAX_DRIFT_Y * level,
+	};
+}
+
 export interface RenderTokens {
 	bg: string;
 	fg: string;
@@ -40,6 +82,7 @@ export interface DecayContext {
 	canvas: { width: number; height: number };
 	filter: string;
 	globalAlpha: number;
+	globalCompositeOperation: GlobalCompositeOperation;
 	fillStyle: string | CanvasGradient | CanvasPattern;
 	font: string;
 	textBaseline: CanvasTextBaseline;
@@ -75,11 +118,14 @@ export class DecayRenderer {
 		const blur = blurForLevel(level);
 		const alpha = alphaForLevel(level);
 		const drift = driftForLevel(level);
+		const fringe = fringeForLevel(level);
 		ctx.font = tokens.font;
 		ctx.textBaseline = "top";
 
-		for (const word of words) {
-			// Occlude the crisp word underneath; occlusion strengthens with decay.
+		for (let i = 0; i < words.length; i++) {
+			const word = words[i];
+			// Occlude the crisp word underneath, in place; occlusion strengthens
+			// with decay while the ghost drifts away from this anchor box.
 			ctx.filter = "none";
 			ctx.globalAlpha = level;
 			ctx.fillStyle = tokens.bg;
@@ -88,17 +134,37 @@ export class DecayRenderer {
 			// The word's Range rect spans the line box (line-height leading); offset
 			// down to the glyph top so the ghost sits on its word, then drift below.
 			const glyphTop = word.y + Math.max(0, (word.h - tokens.fontSizePx) / 2);
+			// Per-word lateral scatter on top of the shared baseline drift.
+			const { dx, dy } = driftVector(i, level);
 
-			// Paint the decaying ghost: faded, blurred, drifted off its baseline.
+			// Paint the decaying ghost: faded, blurred, drifted off its anchor.
+			const gx = word.x + dx;
+			const gy = glyphTop + drift + dy;
 			ctx.filter = blur > 0 ? `blur(${blur}px)` : "none";
 			ctx.globalAlpha = alpha;
 			ctx.fillStyle = tokens.fg;
-			ctx.fillText(word.text, word.x, glyphTop + drift);
+			ctx.fillText(word.text, gx, gy);
+
+			// Past half-decay, split the glyph into screen-blended red + cyan
+			// copies so a chromatic fringe bleeds from the edges — crisp (no blur)
+			// so the colour separation reads clearly, brighter as decay deepens.
+			if (fringe > 0) {
+				ctx.filter = "none";
+				ctx.globalAlpha = 0.5 * level;
+				ctx.globalCompositeOperation = "screen";
+				ctx.fillStyle = "rgb(255,0,0)";
+				ctx.fillText(word.text, gx + fringe, gy);
+				ctx.fillStyle = "rgb(0,255,255)";
+				ctx.fillText(word.text, gx - fringe, gy);
+				ctx.globalCompositeOperation = "source-over";
+			}
 		}
 
-		// Restore defaults so the next frame's clear isn't filtered or alpha'd.
+		// Restore every touched default so the next frame's clear isn't filtered,
+		// alpha'd, or composited under a stale blend mode.
 		ctx.filter = "none";
 		ctx.globalAlpha = 1;
+		ctx.globalCompositeOperation = "source-over";
 	}
 }
 

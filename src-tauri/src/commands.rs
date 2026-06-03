@@ -8,6 +8,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use tauri::State;
 
+use crate::decay::Intensity;
 use crate::error::{Error, Result};
 use crate::idle_timer::IdleTimer;
 use crate::session_store::{SessionStats, SessionStore};
@@ -48,4 +49,21 @@ pub fn get_active_session_id(active: State<'_, ActiveSession>) -> i64 {
 pub fn get_stats(session_id: i64, store: State<'_, Mutex<SessionStore>>) -> Result<SessionStats> {
     let store = store.lock().map_err(|_| Error::LockPoisoned)?;
     store.get_stats(session_id)
+}
+
+/// Retune decay intensity: update the live timer and persist it on the session.
+#[tauri::command]
+pub fn set_intensity(
+    intensity: Intensity,
+    timer: State<'_, Arc<IdleTimer>>,
+    store: State<'_, Mutex<SessionStore>>,
+    active: State<'_, ActiveSession>,
+) -> Result<()> {
+    // Persist first, then retune the live timer: if the DB write fails, the
+    // timer is left untouched so the visible decay rate and the stored row stay
+    // consistent (both old) rather than diverging.
+    let store = store.lock().map_err(|_| Error::LockPoisoned)?;
+    store.set_intensity(active.0, intensity)?;
+    timer.set_intensity(intensity);
+    Ok(())
 }

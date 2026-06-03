@@ -1,6 +1,6 @@
 import { type RefObject, useEffect, useRef } from "react";
 import { DecayRenderer, type RenderTokens, readTokens } from "../canvas/decay";
-import { extractWordBoxes } from "../canvas/wordBoxes";
+import { WordBoxCache } from "../canvas/wordBoxes";
 
 interface DecayCanvasProps {
 	editorRef: RefObject<HTMLDivElement | null>;
@@ -21,6 +21,8 @@ export function DecayCanvas({ editorRef, sampleLevel }: DecayCanvasProps) {
 		if (!ctx) return;
 
 		const renderer = new DecayRenderer();
+		const cache = new WordBoxCache();
+		const invalidate = () => cache.invalidate();
 		let tokens: RenderTokens = readTokens(editor);
 		let dpr = window.devicePixelRatio || 1;
 
@@ -30,6 +32,7 @@ export function DecayCanvas({ editorRef, sampleLevel }: DecayCanvasProps) {
 			canvas.width = Math.max(1, Math.round(rect.width * dpr));
 			canvas.height = Math.max(1, Math.round(rect.height * dpr));
 			tokens = readTokens(editor); // font/colours can shift with theme or zoom
+			invalidate(); // canvas geometry moved → word boxes must be re-measured
 		};
 		resize();
 
@@ -39,10 +42,21 @@ export function DecayCanvas({ editorRef, sampleLevel }: DecayCanvasProps) {
 		// box, so the ResizeObserver alone can miss it — catch window resize too.
 		window.addEventListener("resize", resize);
 
+		// Re-measure only when the text or its layout actually changes: edits and
+		// paste/undo (MutationObserver) or the editor scrolling. Between these the
+		// cached boxes are reused, so idle decay frames do zero layout reflow.
+		const mutations = new MutationObserver(invalidate);
+		mutations.observe(editor, {
+			childList: true,
+			characterData: true,
+			subtree: true,
+		});
+		editor.addEventListener("scroll", invalidate);
+
 		let raf = 0;
 		const frame = () => {
 			const level = sampleLevel(performance.now());
-			const words = extractWordBoxes(editor, canvas.getBoundingClientRect());
+			const words = cache.boxes(editor, canvas.getBoundingClientRect());
 			renderer.render(ctx, level, words, tokens, dpr);
 			raf = requestAnimationFrame(frame);
 		};
@@ -51,6 +65,8 @@ export function DecayCanvas({ editorRef, sampleLevel }: DecayCanvasProps) {
 		return () => {
 			cancelAnimationFrame(raf);
 			observer.disconnect();
+			mutations.disconnect();
+			editor.removeEventListener("scroll", invalidate);
 			window.removeEventListener("resize", resize);
 		};
 	}, [editorRef, sampleLevel]);

@@ -1,7 +1,8 @@
 // DOM geometry for the decay overlay. Walks the editor's text nodes and
 // measures each word's live bounding box via a Range, mapped into the canvas's
-// local coordinate space. Re-run every frame so scroll, resize, and zoom are
-// tracked without caching (the IMPLEMENTATION-PLAN §1b mitigation for drift).
+// local coordinate space. The measurement forces a layout reflow, so the
+// WordBoxCache below memoises it and only re-measures when the DecayCanvas
+// observers report a change (DOM mutation, editor scroll, canvas resize).
 
 export interface WordBox {
 	text: string;
@@ -41,4 +42,33 @@ export function extractWordBoxes(
 		}
 	}
 	return boxes;
+}
+
+type Extractor = (editor: HTMLElement, canvasRect: DOMRect) => WordBox[];
+
+// Memoises word-box extraction so the render loop stops forcing a layout reflow
+// on every animation frame. Phase 1 re-measured every frame (correct but a
+// per-RAF reflow during idle decay); this serves a cached result and only
+// re-measures after `invalidate()`. The DecayCanvas wires invalidation to a
+// MutationObserver (paste/undo/edits), the editor scroll event, and resize.
+export class WordBoxCache {
+	private cached: WordBox[] = [];
+	private dirty = true;
+
+	// `extract` is injectable so tests can drive the dirty logic without a DOM.
+	constructor(private readonly extract: Extractor = extractWordBoxes) {}
+
+	// Mark the cache stale; the next boxes() call re-measures.
+	invalidate(): void {
+		this.dirty = true;
+	}
+
+	// Current word boxes, re-measuring only when stale.
+	boxes(editor: HTMLElement, canvasRect: DOMRect): readonly WordBox[] {
+		if (this.dirty) {
+			this.cached = this.extract(editor, canvasRect);
+			this.dirty = false;
+		}
+		return this.cached;
+	}
 }

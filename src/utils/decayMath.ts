@@ -1,10 +1,31 @@
-// Pure decay math shared by the Canvas pipeline. Phase 2 adds levelFromMs
-// (cubic ease-in) here; Phase 1 only needs clamping + tick interpolation.
+// Pure decay math shared by the Canvas pipeline. Phase 2 adds the quadratic
+// ease-in (levelFromMs) here; Phase 1 only needs clamping + tick interpolation.
+
+import type { Intensity } from "../types/ipc";
 
 export function clamp01(x: number): number {
 	if (x < 0) return 0;
 	if (x > 1) return 1;
 	return x;
+}
+
+// Idle milliseconds that map to full decay (level 1.0), per intensity.
+// Mirrors `Intensity::full_decay_ms` in src-tauri/src/decay.rs — keep in sync.
+export const FULL_DECAY_MS: Record<Intensity, number> = {
+	gentle: 8_000,
+	normal: 5_000,
+	brutal: 2_000,
+};
+
+// Map idle milliseconds to a decay level in [0, 1] via quadratic ease-in.
+//
+// The authoritative curve lives in Rust (decay.rs::decay_level); this is its
+// tested TS mirror, kept identical for the vitest parity box. `t = ms/full`
+// clamped to [0,1], then `t²` — a slow start that accelerates, so a longer
+// pause bites disproportionately harder than a linear ramp would.
+export function levelFromMs(ms: number, intensity: Intensity): number {
+	const t = clamp01(ms / FULL_DECAY_MS[intensity]);
+	return t * t;
 }
 
 export interface LevelSample {

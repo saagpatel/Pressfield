@@ -41,7 +41,8 @@ pub fn run() -> anyhow::Result<()> {
         .invoke_handler(tauri::generate_handler![
             commands::record_keystroke,
             commands::get_active_session_id,
-            commands::get_stats
+            commands::get_stats,
+            commands::set_intensity
         ])
         .run(tauri::generate_context!())
         .map_err(|e| anyhow::anyhow!("tauri runtime error: {e}"))?;

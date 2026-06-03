@@ -52,6 +52,87 @@ body {
 	color: var(--muted);
 }
 
+/* Intensity selector: a compact segmented control living in the top bar. */
+.settings {
+	margin: 0;
+	padding: 0;
+	border: 0;
+	display: flex;
+	align-items: center;
+	gap: 10px;
+}
+
+.settings__legend {
+	float: left; /* fieldset legends don't flex; float keeps it inline-left */
+	padding: 0;
+	color: var(--muted);
+	letter-spacing: 0.14em;
+	text-transform: uppercase;
+}
+
+.settings__options {
+	display: flex;
+	gap: 2px;
+	padding: 2px;
+	border: 1px solid var(--rule);
+	border-radius: 6px;
+}
+
+.settings__option {
+	display: inline-flex;
+	align-items: baseline;
+	gap: 5px;
+	padding: 4px 10px;
+	border-radius: 4px;
+	cursor: pointer;
+	color: var(--muted);
+	transition:
+		background 160ms ease,
+		color 160ms ease;
+}
+
+.settings__option:hover {
+	color: var(--fg);
+	background: var(--rule);
+}
+
+.settings__option--active {
+	color: var(--bg);
+	background: var(--accent);
+}
+
+.settings__option--active:hover {
+	color: var(--bg);
+	background: var(--accent);
+}
+
+/* Visually hide the native radio but keep it focusable for keyboard + a11y. */
+.settings__radio {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	margin: -1px;
+	padding: 0;
+	border: 0;
+	clip: rect(0 0 0 0);
+	overflow: hidden;
+}
+
+/* Replace the removed native outline with a visible focus ring on the label. */
+.settings__option:focus-within {
+	outline: 2px solid var(--accent);
+	outline-offset: 1px;
+}
+
+.settings__option--active:focus-within {
+	outline-color: var(--fg);
+}
+
+.settings__hint {
+	font-size: 10px;
+	opacity: 0.75;
+}
+
 /* Positioning context shared by the editor and the decay overlay. */
 .surface {
 	position: relative;

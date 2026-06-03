@@ -33,6 +33,25 @@ impl Intensity {
             Intensity::Brutal => "brutal",
         }
     }
+
+    /// Compact tag for the lock-free `AtomicU8` in [`crate::idle_timer`].
+    pub fn as_u8(self) -> u8 {
+        match self {
+            Intensity::Gentle => 0,
+            Intensity::Normal => 1,
+            Intensity::Brutal => 2,
+        }
+    }
+
+    /// Inverse of [`Intensity::as_u8`]; `None` for an unknown tag.
+    pub fn from_u8(value: u8) -> Option<Self> {
+        match value {
+            0 => Some(Intensity::Gentle),
+            1 => Some(Intensity::Normal),
+            2 => Some(Intensity::Brutal),
+            _ => None,
+        }
+    }
 }
 
 /// Live decay snapshot carried by the `decay-update` event.
@@ -47,11 +66,15 @@ pub struct DecayUpdate {
 
 /// Map idle milliseconds to a decay level in `[0.0, 1.0]`.
 ///
-/// Linear ramp clamped at full decay; [`Intensity::full_decay_ms`] sets how
-/// much idle time reaches `1.0`.
+/// Quadratic ease-in: `t = ms_idle / full_decay_ms` clamped to `[0, 1]`, then
+/// `t²`. A slow start that accelerates, so a longer pause bites
+/// disproportionately harder than a linear ramp. This is the authoritative
+/// curve — `src/utils/decayMath.ts::levelFromMs` mirrors it for the vitest box.
+/// [`Intensity::full_decay_ms`] sets how much idle time reaches `1.0`.
 pub fn decay_level(ms_idle: u64, intensity: Intensity) -> f32 {
     let full = intensity.full_decay_ms() as f32;
-    (ms_idle as f32 / full).min(1.0)
+    let t = (ms_idle as f32 / full).min(1.0);
+    t * t
 }
 
 #[cfg(test)]
@@ -77,9 +100,10 @@ mod tests {
     }
 
     #[test]
-    fn linear_ramp_hits_midpoint() {
-        // Halfway through full_decay_ms → 0.5 under the Phase 0 linear ramp.
-        assert_eq!(decay_level(2_500, Intensity::Normal), 0.5);
+    fn quadratic_ramp_hits_quarter_at_midpoint() {
+        // Halfway through full_decay_ms → t=0.5 → t²=0.25 under the Phase 2
+        // quadratic ease-in. This is the Rust side of the Phase 2 curve gate.
+        assert_eq!(decay_level(2_500, Intensity::Normal), 0.25);
     }
 
     #[test]

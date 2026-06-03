@@ -68,6 +68,15 @@ impl SessionStore {
         Ok(())
     }
 
+    /// Update the persisted intensity for a session (set from the settings UI).
+    pub fn set_intensity(&self, session_id: i64, intensity: Intensity) -> Result<()> {
+        self.conn.execute(
+            "UPDATE sessions SET intensity = ?1 WHERE id = ?2",
+            (intensity.as_str(), session_id),
+        )?;
+        Ok(())
+    }
+
     /// Close a session, stamping `ended_at` and the final word count.
     pub fn end_session(&self, session_id: i64, word_count: i64, ended_at: i64) -> Result<()> {
         self.conn.execute(
@@ -153,6 +162,18 @@ mod tests {
             .expect("delete session");
         // FK pragma is on → keystrokes cascade away with the session.
         assert_eq!(store.keystroke_count(id).expect("count"), 0);
+    }
+
+    #[test]
+    fn set_intensity_updates_the_session_row() {
+        let store = SessionStore::open_in_memory().expect("open");
+        let id = store
+            .start_session(Intensity::Normal, 0)
+            .expect("start session");
+        store
+            .set_intensity(id, Intensity::Brutal)
+            .expect("set intensity");
+        assert_eq!(store.get_stats(id).expect("stats").intensity, "brutal");
     }
 
     #[test]
