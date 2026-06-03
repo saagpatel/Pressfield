@@ -1,0 +1,135 @@
+{
+	"project": "Pressfield",
+	"current_phase": 0,
+	"updated_at": "2026-06-02",
+	"phases": [
+		{
+			"phase": 0,
+			"name": "Tauri 2 Scaffold + Rust Idle Timer + IPC + SQLite Session Store",
+			"status": "done",
+			"tasks": [
+				{
+					"id": "0.1",
+					"name": "Scaffold Tauri 2 (React/Vite/TS) and verify toolchain",
+					"status": "done"
+				},
+				{
+					"id": "0.2",
+					"name": "idle_timer.rs: 100ms tick, ms_idle counter, emits decay-update",
+					"status": "done"
+				},
+				{
+					"id": "0.3",
+					"name": "record_keystroke command: resets idle timer, logs keystroke row",
+					"status": "done"
+				},
+				{
+					"id": "0.4",
+					"name": "session_store.rs: rusqlite bundled, embedded schema, session CRUD",
+					"status": "done"
+				},
+				{
+					"id": "0.5",
+					"name": "Editor.tsx + useDecayEvents.ts wired to IPC (no Canvas)",
+					"status": "done"
+				},
+				{
+					"id": "0.6",
+					"name": "Write progress.json + tests.json",
+					"status": "done"
+				}
+			]
+		},
+		{
+			"phase": 1,
+			"name": "Canvas Decay Overlay — First Shippable Checkpoint",
+			"status": "pending",
+			"tasks": [
+				{
+					"id": "1.1",
+					"name": "DecayCanvas.tsx absolute overlay, ResizeObserver",
+					"status": "pending"
+				},
+				{
+					"id": "1.2",
+					"name": "canvas/decay.ts DecayRenderer.render(level, words)",
+					"status": "pending"
+				},
+				{
+					"id": "1.3",
+					"name": "useDecayEvents.ts 60fps interpolation between ticks",
+					"status": "pending"
+				},
+				{
+					"id": "1.4",
+					"name": "Wire DecayCanvas into App.tsx with DOM bounding boxes",
+					"status": "pending"
+				}
+			]
+		},
+		{
+			"phase": 2,
+			"name": "Decay Tuning, Intensity Setting, Word Drift, Robustness",
+			"status": "pending",
+			"tasks": [
+				{
+					"id": "2.1",
+					"name": "Word drift in DecayRenderer (Knuth-seeded per-word vector)",
+					"status": "pending"
+				},
+				{
+					"id": "2.2",
+					"name": "Chromatic aberration fringe at level > 0.5",
+					"status": "pending"
+				},
+				{
+					"id": "2.3",
+					"name": "decayMath.ts levelFromMs cubic ease-in",
+					"status": "pending"
+				},
+				{
+					"id": "2.4",
+					"name": "SettingsPanel.tsx intensity selector + set_intensity IPC",
+					"status": "pending"
+				},
+				{
+					"id": "2.5",
+					"name": "MutationObserver/ResizeObserver canvas re-sync on paste/undo/resize",
+					"status": "pending"
+				}
+			]
+		},
+		{
+			"phase": 3,
+			"name": "Stats, Export, Themes, Hardcore Scaffold",
+			"status": "pending",
+			"tasks": [
+				{
+					"id": "3.1",
+					"name": "StatsPanel.tsx + useSessionStats.ts polling get_stats",
+					"status": "pending"
+				},
+				{
+					"id": "3.2",
+					"name": "export_text command + Copy clean text button",
+					"status": "pending"
+				},
+				{
+					"id": "3.3",
+					"name": "Theme system: dark/light CSS tokens, localStorage persistence",
+					"status": "pending"
+				},
+				{
+					"id": "3.4",
+					"name": "Inert hardcore toggle scaffold (v2 tooltip, no code path)",
+					"status": "pending"
+				},
+				{
+					"id": "3.5",
+					"name": "get_recent_sessions command + history table",
+					"status": "pending"
+				}
+			]
+		}
+	]
+}

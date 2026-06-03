@@ -1,0 +1,75 @@
+:root {
+	--bg: #0e0e10;
+	--fg: #e8e6e1;
+	--muted: #6b6b72;
+	--rule: #1d1d21;
+	--accent: #d8412f; /* the one bold accent — decay red */
+	--bar-h: 40px;
+	--prose: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+	--mono: "SF Mono", "JetBrains Mono", "Fira Code", ui-monospace, monospace;
+}
+
+* {
+	box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+	height: 100%;
+	margin: 0;
+}
+
+body {
+	background: var(--bg);
+	color: var(--fg);
+}
+
+.app {
+	display: flex;
+	flex-direction: column;
+	height: 100vh;
+}
+
+.app__bar {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	height: var(--bar-h);
+	padding: 0 20px;
+	border-bottom: 1px solid var(--rule);
+	font-family: var(--mono);
+	font-size: 12px;
+}
+
+.app__title {
+	font-weight: 700;
+	letter-spacing: 0.18em;
+	text-transform: uppercase;
+}
+
+.app__readout {
+	color: var(--muted);
+}
+
+.editor {
+	flex: 1;
+	width: 100%;
+	max-width: 70ch;
+	margin: 0 auto;
+	padding: 64px clamp(24px, 8vw, 120px);
+	overflow-y: auto;
+	outline: none;
+	font-family: var(--prose);
+	font-weight: 300;
+	font-size: 22px;
+	line-height: 1.7;
+	caret-color: var(--accent);
+}
+
+.editor:empty::before {
+	content: attr(data-placeholder);
+	color: var(--muted);
+	font-style: italic;
+	pointer-events: none;
+}
