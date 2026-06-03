@@ -1,10 +1,14 @@
 import { invoke } from "@tauri-apps/api/core";
-import { useEffect, useState } from "react";
+import { type Ref, useEffect, useState } from "react";
+
+interface EditorProps {
+	ref?: Ref<HTMLDivElement>;
+}
 
 // Bare contenteditable surface. Every keystroke resets the Rust idle timer via
-// `record_keystroke`. No decay rendering here — the Canvas overlay lands in
-// Phase 1. The prose lives only in the DOM and is never sent to Rust.
-export function Editor() {
+// `record_keystroke`. The Canvas overlay (a sibling in App) reads this element's
+// geometry through `ref`. The prose lives only in the DOM and never reaches Rust.
+export function Editor({ ref }: EditorProps) {
 	const [sessionId, setSessionId] = useState<number | null>(null);
 
 	useEffect(() => {
@@ -29,6 +33,7 @@ export function Editor() {
 
 	return (
 		<div
+			ref={ref}
 			className="editor"
 			contentEditable
 			suppressContentEditableWarning

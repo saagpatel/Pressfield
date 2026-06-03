@@ -1,6 +1,6 @@
 {
 	"project": "Pressfield",
-	"current_phase": 0,
+	"current_phase": 1,
 	"updated_at": "2026-06-02",
 	"phases": [
 		{
@@ -43,27 +43,27 @@
 		{
 			"phase": 1,
 			"name": "Canvas Decay Overlay — First Shippable Checkpoint",
-			"status": "pending",
+			"status": "done",
 			"tasks": [
 				{
 					"id": "1.1",
-					"name": "DecayCanvas.tsx absolute overlay, ResizeObserver",
-					"status": "pending"
+					"name": "DecayCanvas.tsx absolute overlay, ResizeObserver + window resize",
+					"status": "done"
 				},
 				{
 					"id": "1.2",
-					"name": "canvas/decay.ts DecayRenderer.render(level, words)",
-					"status": "pending"
+					"name": "canvas/decay.ts DecayRenderer: occlusion + fade + blur + baseline drift",
+					"status": "done"
 				},
 				{
 					"id": "1.3",
-					"name": "useDecayEvents.ts 60fps interpolation between ticks",
-					"status": "pending"
+					"name": "useDecayEvents 60fps interpolation (projectLevel) with snap-on-reset",
+					"status": "done"
 				},
 				{
 					"id": "1.4",
-					"name": "Wire DecayCanvas into App.tsx with DOM bounding boxes",
-					"status": "pending"
+					"name": "Wire DecayCanvas into App.tsx; extractWordBoxes live DOM geometry",
+					"status": "done"
 				}
 			]
 		},
@@ -94,7 +94,7 @@
 				},
 				{
 					"id": "2.5",
-					"name": "MutationObserver/ResizeObserver canvas re-sync on paste/undo/resize",
+					"name": "MutationObserver word-box cache + re-sync on paste/undo/resize",
 					"status": "pending"
 				}
 			]
