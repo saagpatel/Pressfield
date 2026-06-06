@@ -10,15 +10,18 @@ const OPTIONS: { value: Intensity; label: string; hint: string }[] = [
 interface SettingsPanelProps {
 	// Current intensity, read back from the decay stream (Rust is authoritative).
 	current: Intensity;
+	// The live session id; intensity is persisted on it (changes on doc switch).
+	sessionId: number | null;
 }
 
 // Intensity selector. Writes through to Rust `set_intensity`, which retunes the
-// idle timer and persists the choice on the active session row. The checked
+// idle timer and persists the choice on the current session row. The checked
 // state reflects the backend value carried on the next decay-update event, so
 // the control always mirrors the real decay rate rather than optimistic state.
-export function SettingsPanel({ current }: SettingsPanelProps) {
+export function SettingsPanel({ current, sessionId }: SettingsPanelProps) {
 	const choose = (intensity: Intensity) => {
-		invoke("set_intensity", { intensity }).catch((err) =>
+		if (sessionId === null) return;
+		invoke("set_intensity", { sessionId, intensity }).catch((err) =>
 			console.error("set_intensity failed", err),
 		);
 	};

@@ -57,7 +57,9 @@ pub fn run() -> anyhow::Result<()> {
             commands::rename_document,
             commands::delete_document,
             commands::list_documents,
-            commands::get_active_document
+            commands::get_active_document,
+            commands::start_document_session,
+            commands::get_recent_document_sessions
         ])
         .run(tauri::generate_context!())
         .map_err(|e| anyhow::anyhow!("tauri runtime error: {e}"))?;

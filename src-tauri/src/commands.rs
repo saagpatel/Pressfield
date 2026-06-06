@@ -81,19 +81,21 @@ pub fn get_stats(session_id: i64, store: State<'_, Mutex<SessionStore>>) -> Resu
     store.get_stats(session_id)
 }
 
-/// Retune decay intensity: update the live timer and persist it on the session.
+/// Retune decay intensity: update the live timer and persist it on the given
+/// session. The webview passes the current session id (which changes when the
+/// active document is switched), so the choice always lands on the live session.
 #[tauri::command]
 pub fn set_intensity(
+    session_id: i64,
     intensity: Intensity,
     timer: State<'_, Arc<IdleTimer>>,
     store: State<'_, Mutex<SessionStore>>,
-    active: State<'_, ActiveSession>,
 ) -> Result<()> {
     // Persist first, then retune the live timer: if the DB write fails, the
     // timer is left untouched so the visible decay rate and the stored row stay
     // consistent (both old) rather than diverging.
     let store = store.lock().map_err(|_| Error::LockPoisoned)?;
-    store.set_intensity(active.0, intensity)?;
+    store.set_intensity(session_id, intensity)?;
     timer.set_intensity(intensity);
     Ok(())
 }
@@ -118,6 +120,18 @@ pub fn get_recent_sessions(
 ) -> Result<Vec<SessionStats>> {
     let store = store.lock().map_err(|_| Error::LockPoisoned)?;
     store.get_recent_sessions(limit)
+}
+
+/// Return the most recent sessions for a specific document, newest first — the
+/// per-document history the stats panel shows for the active document.
+#[tauri::command]
+pub fn get_recent_document_sessions(
+    document_id: i64,
+    limit: i64,
+    store: State<'_, Mutex<SessionStore>>,
+) -> Result<Vec<SessionStats>> {
+    let store = store.lock().map_err(|_| Error::LockPoisoned)?;
+    store.get_recent_sessions_for_document(document_id, limit)
 }
 
 // ── Phase 4: Document IPC surface ───────────────────────────────────────────
@@ -178,6 +192,19 @@ pub fn get_active_document(
 ) -> Result<Document> {
     let store = store.lock().map_err(|_| Error::LockPoisoned)?;
     store.get_document(active.0)
+}
+
+/// Start a fresh session bound to `document_id`, inheriting the live decay
+/// intensity. Returned to the webview when switching documents (Phase 6); the
+/// webview finalizes the outgoing session before calling this.
+#[tauri::command]
+pub fn start_document_session(
+    document_id: i64,
+    timer: State<'_, Arc<IdleTimer>>,
+    store: State<'_, Mutex<SessionStore>>,
+) -> Result<i64> {
+    let store = store.lock().map_err(|_| Error::LockPoisoned)?;
+    store.start_session_for_document(timer.intensity(), now_ms(), document_id)
 }
 
 #[cfg(test)]

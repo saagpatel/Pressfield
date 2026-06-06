@@ -31,6 +31,15 @@ export interface DocumentRecord {
 	updated_at: number; // unix ms
 }
 
+// Lightweight document descriptor for the palette list (mirrors Rust
+// `DocumentMeta`; no prose body).
+export interface DocumentMeta {
+	id: number;
+	name: string;
+	created_at: number; // unix ms
+	updated_at: number; // unix ms
+}
+
 const INTENSITIES: readonly Intensity[] = ["gentle", "normal", "brutal"];
 
 function isIntensity(value: unknown): value is Intensity {

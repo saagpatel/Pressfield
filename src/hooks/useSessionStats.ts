@@ -13,9 +13,13 @@ export interface SessionStatsView {
 	history: SessionStats[];
 }
 
-// Poll the active session's stats + recent-session history. Rust owns the source
-// data; this is a read-only view that refreshes every POLL_MS.
-export function useSessionStats(sessionId: number | null): SessionStatsView {
+// Poll the active session's stats + the active document's recent-session history.
+// Rust owns the source data; this is a read-only view that refreshes every
+// POLL_MS. History is per-document, so switching documents repoints it.
+export function useSessionStats(
+	sessionId: number | null,
+	documentId: number | null,
+): SessionStatsView {
 	const [stats, setStats] = useState<SessionStats | null>(null);
 	const [history, setHistory] = useState<SessionStats[]>([]);
 
@@ -27,9 +31,16 @@ export function useSessionStats(sessionId: number | null): SessionStatsView {
 			invoke<SessionStats>("get_stats", { sessionId })
 				.then((s) => !cancelled && setStats(s))
 				.catch((err) => console.error("get_stats failed", err));
-			invoke<SessionStats[]>("get_recent_sessions", { limit: 10 })
-				.then((h) => !cancelled && setHistory(h))
-				.catch((err) => console.error("get_recent_sessions failed", err));
+			if (documentId !== null) {
+				invoke<SessionStats[]>("get_recent_document_sessions", {
+					documentId,
+					limit: 10,
+				})
+					.then((h) => !cancelled && setHistory(h))
+					.catch((err) =>
+						console.error("get_recent_document_sessions failed", err),
+					);
+			}
 		};
 
 		poll(); // prime immediately so the panel isn't empty for 5s
@@ -38,7 +49,7 @@ export function useSessionStats(sessionId: number | null): SessionStatsView {
 			cancelled = true;
 			clearInterval(id);
 		};
-	}, [sessionId]);
+	}, [sessionId, documentId]);
 
 	return { stats, history };
 }

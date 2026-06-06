@@ -51,8 +51,9 @@ impl IdleTimer {
     }
 
     /// Current intensity; an unrecognised tag (impossible via `set_intensity`)
-    /// falls back to `Normal` rather than panicking.
-    fn intensity(&self) -> Intensity {
+    /// falls back to `Normal` rather than panicking. Read by `start_document_session`
+    /// so a session started on a document switch inherits the live decay rate.
+    pub fn intensity(&self) -> Intensity {
         Intensity::from_u8(self.intensity.load(Ordering::SeqCst)).unwrap_or(Intensity::Normal)
     }
 
