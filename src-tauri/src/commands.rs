@@ -11,7 +11,7 @@ use tauri::State;
 use crate::decay::Intensity;
 use crate::error::{Error, Result};
 use crate::idle_timer::IdleTimer;
-use crate::session_store::{SessionStats, SessionStore};
+use crate::session_store::{Document, DocumentMeta, SessionStats, SessionStore};
 
 /// The session opened when the app launched, held in Tauri managed state.
 pub struct ActiveSession(pub i64);
@@ -113,6 +113,55 @@ pub fn get_recent_sessions(
 ) -> Result<Vec<SessionStats>> {
     let store = store.lock().map_err(|_| Error::LockPoisoned)?;
     store.get_recent_sessions(limit)
+}
+
+// ── Phase 4: Document IPC surface ───────────────────────────────────────────
+//
+// Thin wrappers over the tested `SessionStore` document methods. Like the
+// session commands above, the store method is the unit under test; these only
+// lock managed state and forward. `save_document` stamps `updated_at` server-
+// side (mirroring `end_session`) so the webview never owns the clock.
+
+/// Create a new (empty) document and return its id.
+#[tauri::command]
+pub fn create_document(name: String, store: State<'_, Mutex<SessionStore>>) -> Result<i64> {
+    let store = store.lock().map_err(|_| Error::LockPoisoned)?;
+    store.create_document(&name)
+}
+
+/// Fetch a document's full record, including its prose body.
+#[tauri::command]
+pub fn get_document(id: i64, store: State<'_, Mutex<SessionStore>>) -> Result<Document> {
+    let store = store.lock().map_err(|_| Error::LockPoisoned)?;
+    store.get_document(id)
+}
+
+/// Persist a document's prose body; `updated_at` is stamped server-side.
+#[tauri::command]
+pub fn save_document(id: i64, body: String, store: State<'_, Mutex<SessionStore>>) -> Result<()> {
+    let store = store.lock().map_err(|_| Error::LockPoisoned)?;
+    store.save_document(id, &body, now_ms())
+}
+
+/// Rename a document.
+#[tauri::command]
+pub fn rename_document(id: i64, name: String, store: State<'_, Mutex<SessionStore>>) -> Result<()> {
+    let store = store.lock().map_err(|_| Error::LockPoisoned)?;
+    store.rename_document(id, &name)
+}
+
+/// Delete a document; its sessions are preserved with a NULL `document_id`.
+#[tauri::command]
+pub fn delete_document(id: i64, store: State<'_, Mutex<SessionStore>>) -> Result<()> {
+    let store = store.lock().map_err(|_| Error::LockPoisoned)?;
+    store.delete_document(id)
+}
+
+/// List all documents, most-recently-updated first (for the Cmd+O palette).
+#[tauri::command]
+pub fn list_documents(store: State<'_, Mutex<SessionStore>>) -> Result<Vec<DocumentMeta>> {
+    let store = store.lock().map_err(|_| Error::LockPoisoned)?;
+    store.list_documents()
 }
 
 #[cfg(test)]

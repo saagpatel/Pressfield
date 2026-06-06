@@ -30,8 +30,8 @@ CREATE INDEX IF NOT EXISTS idx_keystrokes_session ON keystrokes(session_id);
 CREATE INDEX IF NOT EXISTS idx_decay_session       ON decay_events(session_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_started    ON sessions(started_at DESC);
 
--- v2: named documents with prose body.
--- NOTE: sessions.document_id is NOT here — it is added once via the
+-- v2: named documents with prose body. Fresh DBs get sessions.document_id from
+-- the sessions CREATE TABLE above; real on-disk v1 databases acquire it via the
 -- PRAGMA user_version-gated ALTER TABLE migration in session_store.rs.
 CREATE TABLE IF NOT EXISTS documents (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,

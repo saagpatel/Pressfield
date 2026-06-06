@@ -18,6 +18,7 @@ export interface SessionStats {
 	word_count: number;
 	decay_events: number;
 	intensity: Intensity;
+	document_id: number | null; // mirrors Rust Option<i64>; null pre-migration
 }
 
 const INTENSITIES: readonly Intensity[] = ["gentle", "normal", "brutal"];

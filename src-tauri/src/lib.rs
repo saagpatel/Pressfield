@@ -44,7 +44,13 @@ pub fn run() -> anyhow::Result<()> {
             commands::get_stats,
             commands::set_intensity,
             commands::end_session,
-            commands::get_recent_sessions
+            commands::get_recent_sessions,
+            commands::create_document,
+            commands::get_document,
+            commands::save_document,
+            commands::rename_document,
+            commands::delete_document,
+            commands::list_documents
         ])
         .run(tauri::generate_context!())
         .map_err(|e| anyhow::anyhow!("tauri runtime error: {e}"))?;

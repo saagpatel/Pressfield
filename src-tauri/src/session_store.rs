@@ -203,7 +203,7 @@ impl SessionStore {
                 word_count: row.get(2)?,
                 decay_events: row.get(3)?,
                 intensity: row.get(4)?,
-                document_id: row.get(5).ok(),
+                document_id: row.get::<_, Option<i64>>(5)?,
             })
         })?;
         let mut sessions = Vec::new();
@@ -229,16 +229,15 @@ impl SessionStore {
         let now = now_ms();
         let tx = self.conn.unchecked_transaction()?;
         // Add the column only if it doesn't already exist (fresh DBs created from
-        // the v2 schema already have it; only real on-disk v1 databases are missing it).
-        let has_column: bool = tx
-            .query_row(
-                "SELECT COUNT(*) FROM pragma_table_info('sessions') WHERE name = 'document_id'",
-                [],
-                |row| row.get::<_, i64>(0),
-            )
-            .unwrap_or(0)
-            > 0;
-        if !has_column {
+        // the v2 schema already have it; only real on-disk v1 databases are missing
+        // it). Propagate a probe failure rather than defaulting to "absent" — a
+        // swallowed error there would issue a duplicate ALTER on a v2 DB.
+        let column_count: i64 = tx.query_row(
+            "SELECT COUNT(*) FROM pragma_table_info('sessions') WHERE name = 'document_id'",
+            [],
+            |row| row.get(0),
+        )?;
+        if column_count == 0 {
             tx.execute_batch(
                 "ALTER TABLE sessions ADD COLUMN document_id INTEGER REFERENCES documents(id)",
             )?;
@@ -321,13 +320,16 @@ impl SessionStore {
     /// Sessions that reference this document will have their `document_id` set
     /// to NULL (no cascade — the session history is preserved).
     pub fn delete_document(&self, id: i64) -> Result<()> {
-        // Null out FK references so history isn't lost.
-        self.conn.execute(
+        // Null out FK references first (the FK is NO ACTION, so the DELETE would
+        // be rejected otherwise), then delete — both in one transaction so a
+        // mid-write failure can't leave sessions detached from a surviving doc.
+        let tx = self.conn.unchecked_transaction()?;
+        tx.execute(
             "UPDATE sessions SET document_id = NULL WHERE document_id = ?1",
             [id],
         )?;
-        self.conn
-            .execute("DELETE FROM documents WHERE id = ?1", [id])?;
+        tx.execute("DELETE FROM documents WHERE id = ?1", [id])?;
+        tx.commit()?;
         Ok(())
     }
 
