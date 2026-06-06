@@ -251,9 +251,15 @@
 					"file": "src-tauri/src/commands.rs",
 					"case": "recovered_decay_window: None at/below 5s threshold, Some(started,recovered) above",
 					"status": "passing"
+				},
+				{
+					"id": "fe-hardcore-guard",
+					"file": "src/__tests__/textIntegrity.test.ts",
+					"case": "full decay pass (extractWordBoxes + render) leaves contenteditable innerText + textContent byte-identical (happy-dom env)",
+					"status": "passing"
 				}
 			],
-			"note": "Components/hooks (StatsPanel, Editor, SettingsPanel, useTheme effect) are verified via tsc + manual checks, per the project's node-env / no-RTL test convention. Export is frontend navigator.clipboard, so the original rs-export-text Rust case no longer applies.",
+			"note": "Components/hooks (StatsPanel, Editor, SettingsPanel, useTheme effect) are verified via tsc + manual checks, per the project's node-env / no-RTL convention. The one DOM test (textIntegrity) opts into happy-dom via a per-file docblock for the v1 text-integrity contract. Export is frontend navigator.clipboard, so the original rs-export-text Rust case no longer applies.",
 			"manual": [
 				{
 					"id": "m3-stats",
