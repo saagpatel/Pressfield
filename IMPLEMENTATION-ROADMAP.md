@@ -358,3 +358,113 @@ xcode-select --install
 - Subagent type: coder (Sonnet) for all three.
 
 **Phase-end review:** Run `/ultrareview`. Address all findings. `cargo tauri build` must succeed before marking Phase 3 complete.
+
+---
+
+# v2 — Arc 1: Persistence (Autosave + Named Documents)
+
+v1 is code-complete and fully green (vitest 50, cargo 19, `cargo tauri build` produces a bundle). v2 begins here. **Arc 1 makes Pressfield a tool you can trust real prose to** — text survives a window close, and you can keep more than one document. Hardcore mode and the custom decay-curve editor remain deferred to *later* v2 arcs; persistence is the foundation they build on (and, eventually, threaten).
+
+## Locked decisions (Arc 1)
+| Decision | Choice | Why |
+|----------|--------|-----|
+| Storage medium | Prose stored in the existing rusqlite DB as a `documents.body` column | Fully contained, zero-network, on-brand with the single-window adversarial posture; one store, one backup. Consciously retires the v1 "never prose" invariant in `schema.sql`. |
+| Stats model | Per-document | `sessions.document_id` FK; opening a doc starts/resumes its session; stats panel + 10-row history filter to the active doc. Each document carries its own decay history. |
+| Doc-switcher UX | Command palette (Cmd+O) | Keyboard-summoned overlay to switch/create/rename/delete, then it vanishes. Keeps the writing surface pure — most on-brand with Pressfield's focused posture. |
+| Migration mechanism | `PRAGMA user_version`-gated steps in `session_store.rs` | `documents` is idempotent `CREATE TABLE IF NOT EXISTS`; `ALTER TABLE sessions ADD COLUMN document_id` is **not** idempotent, so it runs once under a v1→v2 version gate. Existing sessions backfill to a default "Untitled" doc — no orphans. |
+| Autosave posture | Decay stays non-destructive; we persist clean `innerText` | v1 decay never touches underlying text, so autosave just saves the real prose on a debounce. The save/decay knot only appears with hardcore mode (a later arc), not here. |
+
+## Data model shift
+```
+documents (NEW)                  sessions (MODIFIED)
+  id          INTEGER PK           + document_id INTEGER REFERENCES documents(id)
+  name        TEXT                 (all v1 columns unchanged)
+  body        TEXT   ← the prose
+  created_at  INTEGER (unix ms)
+  updated_at  INTEGER (unix ms)
+```
+
+---
+
+## Phase 4: Persistence Foundation (Rust / data layer)
+
+**Objective:** `documents` table + versioned `user_version` migration (v1→v2) with backfill; document CRUD Tauri commands; `sessions.document_id` FK; per-document stats query. No UI — commands tested directly via `cargo test`.
+
+**Tasks:**
+1. Schema — add `documents` table (`CREATE TABLE IF NOT EXISTS`) to `schema.sql`; update the file's header comment that currently claims "never prose" — Acceptance: schema applies idempotently on repeat open (existing `schema_reapplies_without_error` test still passes).
+2. Migration — `PRAGMA user_version`-gated step in `session_store.rs`: if version < 2, `ALTER TABLE sessions ADD COLUMN document_id`, create a default "Untitled" document, backfill all existing sessions' `document_id` to it, set version = 2 — Acceptance: a v1-shaped DB (sessions, no `document_id`) opens, migrates once, and every prior session resolves to the Untitled doc; second open is a no-op.
+3. CRUD commands — `create_document(name) -> id`, `rename_document(id, name)`, `delete_document(id)`, `list_documents() -> Vec<DocumentMeta>`, `save_document(id, body)` (upserts body + `updated_at`), `get_document(id) -> Document` — Acceptance: each tested directly against an in-memory DB; `save_document` is idempotent and bumps `updated_at`; `delete_document` cascades/repoints its sessions per the FK rule chosen in Task 2.
+4. Per-document stats — extend the stats query so `get_stats` / `get_recent_sessions` filter by `document_id` — Acceptance: two docs each with their own sessions → each doc's history returns only its own sessions, newest first.
+
+**Verification checklist:**
+- [ ] `documents` table present; `schema.sql` comment no longer claims "never prose"
+- [ ] v1→v2 migration runs once, backfills to Untitled, idempotent on re-open
+- [ ] All five CRUD commands unit-tested against in-memory DB
+- [ ] `save_document` bumps `updated_at`; round-trips body exactly
+- [ ] Per-document stats: history filters to the active doc
+- [ ] `cargo test` → all pass (19 existing + new)
+
+**Risks:**
+- `ALTER TABLE` running twice → "duplicate column" panic: strictly gate behind `user_version < 2`; never put the ALTER in `schema.sql`.
+- `delete_document` orphaning sessions: decide FK action explicitly (repoint-to-Untitled vs. `ON DELETE CASCADE` losing that doc's history) and test it — don't leave it implicit.
+
+**Phase-end review:** Run `/ultrareview`. Address all findings before Phase 5.
+
+---
+
+## Phase 5: Autosave + Active Document (wiring)
+
+**Objective:** The persistence milestone — close the app, reopen, the prose is there. Debounced autosave, editor hydration from saved `body`, and `sessionId` bound to the active document.
+
+**Tasks:**
+1. Active-doc bootstrap — on launch, load the most-recently-updated document (create "Untitled" if the table is empty); hydrate the editor's `contenteditable` from its `body`; start/resume that doc's session — Acceptance: relaunch restores the last document's text into the editor.
+2. Autosave loop — debounce editor text (~750ms) → `save_document(activeDocId, innerText)`; flush on window blur and extend the existing `onCloseRequested` handler to flush a final save *before* `end_session` + `destroy` — Acceptance: type → wait → kill app → reopen → text intact (≤1 debounce window of loss).
+3. Decay-safe save — confirm autosave persists clean `innerText`, never a decayed snapshot (decay is canvas-overlay only; the contenteditable already holds clean text) — Acceptance: trigger heavy decay, let autosave fire mid-decay, reopen → prose is clean, not corrupted.
+
+**Verification checklist:**
+- [ ] Relaunch hydrates the editor from saved body
+- [ ] Autosave fires on debounce + blur + close
+- [ ] Kill-and-reopen loses ≤1 debounce window of text
+- [ ] Autosave during active decay persists clean prose, not distortion
+- [ ] `pnpm vitest run` + `cargo test` → all pass
+- [ ] Operator visual check: type, close, reopen — text is there
+
+**Risks:**
+- Close-handler race: the final flush must `await` before `destroy()` — mirror the existing `end_session` hold-the-close pattern so the write always completes.
+- Hydration vs. decay canvas: ensure `WordBoxCache` re-measures after the editor is populated on launch, or first-frame decay maps to stale boxes.
+
+**Phase-end review:** Run `/ultrareview`. Address all findings before Phase 6.
+
+---
+
+## Phase 6: Named Documents UI (command palette)
+
+**Objective:** Multiple documents, switchable via a Cmd+O command palette; per-document stats on switch; create/rename/delete from the same surface.
+
+**Tasks:**
+1. Command palette — Cmd+O opens a keyboard-driven overlay listing documents (most-recent first) with fuzzy filter; Enter switches; actions to create, rename, delete; Esc dismisses — Acceptance: Cmd+O → type to filter → Enter switches the active doc and its prose; palette vanishes, writing surface stays pure.
+2. Switch semantics — switching documents flushes the outgoing doc's autosave + ends its session, then hydrates the incoming doc + starts its session; stats panel + history repoint to the new doc — Acceptance: switch A→B→A → A's text and A's decay history return intact.
+3. Create / rename / delete UX — new doc opens blank and active; rename updates the palette + any title display; delete confirms, then repoints/cascades per the Phase 4 FK rule and switches to the most-recent remaining doc — Acceptance: delete the active doc → lands on the next most-recent; deleting the last doc creates a fresh Untitled.
+4. UI standards — palette honors `frontend-web-baseline` (non-default typography, accent color, 8px grid, visible focus states, hover transitions, skeleton/empty states) and both themes — Acceptance: palette renders correctly on dark + light; empty state (single Untitled doc) reads intentional, not broken.
+
+**Verification checklist:**
+- [ ] Cmd+O opens; fuzzy filter; Enter switches; Esc dismisses
+- [ ] Switch flushes + ends outgoing session, hydrates + starts incoming
+- [ ] Per-document stats + history follow the active doc
+- [ ] Create / rename / delete all work; delete lands sensibly
+- [ ] Palette honors both themes + `frontend-web-baseline`
+- [ ] `pnpm vitest run` + `cargo test` → all pass
+- [ ] `cargo tauri build` → bundle produced
+- [ ] Operator visual check: full multi-doc round-trip
+
+**Risks:**
+- Switch-while-decaying: flush + session-end must complete before hydrating the next doc, or stats bleed across documents — sequence the awaits explicitly.
+- Palette keyboard focus stealing from the editor: trap focus while open, restore to the editor on dismiss.
+
+**Phase-end review:** Run `/ultrareview`. `cargo tauri build` must succeed before marking Arc 1 complete.
+
+---
+
+## v2 — Later Arcs (not yet scoped)
+- **Arc 2 — Hardcore mode:** text permanently lost when decayed beyond threshold. Separate ethical/UX contract; designed *on top of* persistence (the save/decay knot: save the corpse or the original?). Toggle stays OFF by default.
+- **Arc 3 — Custom decay-curve editor:** let writers tune the decay math (currently quadratic t², authoritative in `decay.rs::decay_level` / `decayMath.ts::levelFromMs`). Power-user polish; lowest stakes.
