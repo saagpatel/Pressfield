@@ -77,6 +77,32 @@ impl SessionStore {
         Ok(())
     }
 
+    /// Record a recovered decay event — a pause that crossed the threshold and
+    /// was typed back out of. Inserts the event row and bumps the session's
+    /// running `decay_events` count (the value surfaced by [`Self::get_stats`]).
+    pub fn record_decay_event(
+        &self,
+        session_id: i64,
+        started_at: i64,
+        recovered_at: i64,
+        peak_level: f32,
+    ) -> Result<()> {
+        // Insert + counter bump in one transaction so a mid-write failure can't
+        // leave the event row and the session's running count out of sync.
+        let tx = self.conn.unchecked_transaction()?;
+        tx.execute(
+            "INSERT INTO decay_events (session_id, started_at, recovered_at, peak_level)
+             VALUES (?1, ?2, ?3, ?4)",
+            (session_id, started_at, recovered_at, peak_level as f64),
+        )?;
+        tx.execute(
+            "UPDATE sessions SET decay_events = decay_events + 1 WHERE id = ?1",
+            [session_id],
+        )?;
+        tx.commit()?;
+        Ok(())
+    }
+
     /// Close a session, stamping `ended_at` and the final word count.
     pub fn end_session(&self, session_id: i64, word_count: i64, ended_at: i64) -> Result<()> {
         self.conn.execute(
@@ -103,6 +129,28 @@ impl SessionStore {
             },
         )?;
         Ok(stats)
+    }
+
+    /// Return up to `limit` sessions, newest first, for the history table.
+    pub fn get_recent_sessions(&self, limit: i64) -> Result<Vec<SessionStats>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT id, started_at, word_count, decay_events, intensity
+             FROM sessions ORDER BY started_at DESC LIMIT ?1",
+        )?;
+        let rows = stmt.query_map([limit], |row| {
+            Ok(SessionStats {
+                session_id: row.get(0)?,
+                started_at: row.get(1)?,
+                word_count: row.get(2)?,
+                decay_events: row.get(3)?,
+                intensity: row.get(4)?,
+            })
+        })?;
+        let mut sessions = Vec::new();
+        for row in rows {
+            sessions.push(row?);
+        }
+        Ok(sessions)
     }
 
     /// Count keystroke rows for a session (verification helper + Phase 3 stats).
@@ -174,6 +222,49 @@ mod tests {
             .set_intensity(id, Intensity::Brutal)
             .expect("set intensity");
         assert_eq!(store.get_stats(id).expect("stats").intensity, "brutal");
+    }
+
+    #[test]
+    fn record_decay_event_inserts_and_increments_count() {
+        let store = SessionStore::open_in_memory().expect("open");
+        let id = store.start_session(Intensity::Normal, 0).expect("start");
+        assert_eq!(store.get_stats(id).expect("stats").decay_events, 0);
+
+        store
+            .record_decay_event(id, 0, 6_000, 0.9)
+            .expect("record event");
+        store
+            .record_decay_event(id, 7_000, 13_000, 1.0)
+            .expect("record event");
+
+        // Both writes landed: the session counter AND the event rows themselves.
+        assert_eq!(store.get_stats(id).expect("stats").decay_events, 2);
+        let event_rows: i64 = store
+            .conn
+            .query_row(
+                "SELECT COUNT(*) FROM decay_events WHERE session_id = ?1",
+                [id],
+                |row| row.get(0),
+            )
+            .expect("count event rows");
+        assert_eq!(event_rows, 2);
+    }
+
+    #[test]
+    fn get_recent_sessions_returns_newest_first() {
+        let store = SessionStore::open_in_memory().expect("open");
+        let a = store.start_session(Intensity::Gentle, 1_000).expect("a");
+        let b = store.start_session(Intensity::Brutal, 2_000).expect("b");
+        store.end_session(a, 5, 1_500).expect("end a");
+        store.end_session(b, 9, 2_500).expect("end b");
+
+        let recent = store.get_recent_sessions(10).expect("recent");
+        assert_eq!(recent.len(), 2);
+        // Newest started_at first.
+        assert_eq!(recent[0].session_id, b);
+        assert_eq!(recent[0].word_count, 9);
+        assert_eq!(recent[1].session_id, a);
+        assert_eq!(recent[1].word_count, 5);
     }
 
     #[test]

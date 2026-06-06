@@ -24,29 +24,48 @@ export function SettingsPanel({ current }: SettingsPanelProps) {
 	};
 
 	return (
-		<fieldset className="settings" aria-label="Decay intensity">
-			<legend className="settings__legend">Intensity</legend>
-			<div className="settings__options">
-				{OPTIONS.map((opt) => (
-					<label
-						key={opt.value}
-						className={`settings__option${
-							current === opt.value ? " settings__option--active" : ""
-						}`}
-					>
-						<input
-							type="radio"
-							name="intensity"
-							value={opt.value}
-							checked={current === opt.value}
-							onChange={() => choose(opt.value)}
-							className="settings__radio"
-						/>
-						<span className="settings__name">{opt.label}</span>
-						<span className="settings__hint">{opt.hint}</span>
-					</label>
-				))}
-			</div>
-		</fieldset>
+		<div className="settings">
+			<fieldset className="settings__group" aria-label="Decay intensity">
+				<legend className="settings__legend">Intensity</legend>
+				<div className="settings__options">
+					{OPTIONS.map((opt) => (
+						<label
+							key={opt.value}
+							className={`settings__option${
+								current === opt.value ? " settings__option--active" : ""
+							}`}
+						>
+							<input
+								type="radio"
+								name="intensity"
+								value={opt.value}
+								checked={current === opt.value}
+								onChange={() => choose(opt.value)}
+								className="settings__radio"
+							/>
+							<span className="settings__name">{opt.label}</span>
+							<span className="settings__hint">{opt.hint}</span>
+						</label>
+					))}
+				</div>
+			</fieldset>
+
+			{/* Inert v2 scaffold: hardcore mode (permanent text loss past full
+			    decay) is deliberately deferred — the toggle is disabled and wired
+			    to nothing, so prose is never destroyed in v1. */}
+			<label
+				className="settings__hardcore"
+				title="Permanent text loss past full decay — coming in v2"
+			>
+				<input
+					type="checkbox"
+					className="settings__hardcore-box"
+					disabled
+					aria-label="Hardcore mode (coming in v2)"
+				/>
+				<span className="settings__name">Hardcore</span>
+				<span className="settings__hint">v2</span>
+			</label>
+		</div>
 	);
 }

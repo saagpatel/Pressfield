@@ -1,6 +1,6 @@
 {
 	"project": "Pressfield",
-	"current_phase": 2,
+	"current_phase": 3,
 	"updated_at": "2026-06-06",
 	"phases": [
 		{
@@ -102,32 +102,37 @@
 		{
 			"phase": 3,
 			"name": "Stats, Export, Themes, Hardcore Scaffold",
-			"status": "pending",
+			"status": "done",
 			"tasks": [
 				{
+					"id": "3.0",
+					"name": "Decay-event recording (record_keystroke seam) + end_session on window close",
+					"status": "done"
+				},
+				{
 					"id": "3.1",
-					"name": "StatsPanel.tsx + useSessionStats.ts polling get_stats",
-					"status": "pending"
+					"name": "StatsPanel.tsx + useSessionStats.ts polling get_stats; live word count",
+					"status": "done"
 				},
 				{
 					"id": "3.2",
-					"name": "export_text command + Copy clean text button",
-					"status": "pending"
+					"name": "Copy clean text via frontend navigator.clipboard (prose never reaches Rust)",
+					"status": "done"
 				},
 				{
 					"id": "3.3",
-					"name": "Theme system: dark/light CSS tokens, localStorage persistence",
-					"status": "pending"
+					"name": "Theme system: dark/light CSS tokens, localStorage, canvas re-tint observer",
+					"status": "done"
 				},
 				{
 					"id": "3.4",
 					"name": "Inert hardcore toggle scaffold (v2 tooltip, no code path)",
-					"status": "pending"
+					"status": "done"
 				},
 				{
 					"id": "3.5",
 					"name": "get_recent_sessions command + history table",
-					"status": "pending"
+					"status": "done"
 				}
 			]
 		}

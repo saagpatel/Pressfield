@@ -221,38 +221,39 @@
 			]
 		},
 		"3": {
-			"planned": [
+			"implemented": [
 				{
-					"id": "fe-stats-render",
-					"file": "src/__tests__/StatsPanel.test.tsx",
-					"case": "renders mock SessionStats: words, decay events, elapsed",
-					"status": "planned"
+					"id": "fe-stats-elapsed",
+					"file": "src/__tests__/statsPanel.test.ts",
+					"case": "formatElapsed: m:ss, sub-minute padding, minute rollover, floor, clamp negative",
+					"status": "passing"
 				},
 				{
-					"id": "fe-hardcore-guard",
-					"file": "src/__tests__/Editor.test.tsx",
-					"case": "contenteditable innerText unchanged after any decay event",
-					"status": "planned"
+					"id": "fe-theme-helpers",
+					"file": "src/__tests__/useTheme.test.ts",
+					"case": "nextTheme toggles dark<->light; parseTheme narrows stored value, defaults dark",
+					"status": "passing"
 				},
 				{
-					"id": "fe-hardcore-disabled",
-					"file": "src/__tests__/SettingsPanel.test.tsx",
-					"case": "hardcore toggle renders disabled, click is a no-op",
-					"status": "planned"
+					"id": "rs-decay-event",
+					"file": "src-tauri/src/session_store.rs",
+					"case": "record_decay_event inserts the event row AND increments the session counter (atomic)",
+					"status": "passing"
 				},
 				{
 					"id": "rs-recent-sessions",
-					"file": "src-tauri/src/commands.rs",
-					"case": "get_recent_sessions returns last 10 with correct counts",
-					"status": "planned"
+					"file": "src-tauri/src/session_store.rs",
+					"case": "get_recent_sessions returns sessions newest-first with correct word counts",
+					"status": "passing"
 				},
 				{
-					"id": "rs-export-text",
+					"id": "rs-decay-window",
 					"file": "src-tauri/src/commands.rs",
-					"case": "export_text writes provided text to clipboard",
-					"status": "planned"
+					"case": "recovered_decay_window: None at/below 5s threshold, Some(started,recovered) above",
+					"status": "passing"
 				}
 			],
+			"note": "Components/hooks (StatsPanel, Editor, SettingsPanel, useTheme effect) are verified via tsc + manual checks, per the project's node-env / no-RTL test convention. Export is frontend navigator.clipboard, so the original rs-export-text Rust case no longer applies.",
 			"manual": [
 				{
 					"id": "m3-stats",
@@ -269,6 +270,10 @@
 				{
 					"id": "m3-history",
 					"case": "history table shows last 10 sessions with correct data"
+				},
+				{
+					"id": "m3-hardcore",
+					"case": "hardcore toggle renders disabled + no-op; editor text survives a full decay (clean export proves it)"
 				},
 				{
 					"id": "m3-build",

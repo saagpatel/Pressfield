@@ -42,7 +42,9 @@ pub fn run() -> anyhow::Result<()> {
             commands::record_keystroke,
             commands::get_active_session_id,
             commands::get_stats,
-            commands::set_intensity
+            commands::set_intensity,
+            commands::end_session,
+            commands::get_recent_sessions
         ])
         .run(tauri::generate_context!())
         .map_err(|e| anyhow::anyhow!("tauri runtime error: {e}"))?;

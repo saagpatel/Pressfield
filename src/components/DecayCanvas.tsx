@@ -53,6 +53,17 @@ export function DecayCanvas({ editorRef, sampleLevel }: DecayCanvasProps) {
 		});
 		editor.addEventListener("scroll", invalidate);
 
+		// Re-read the colour tokens when the theme flips (data-theme on <html>),
+		// so the overlay's occlusion + fringe re-tint to the new palette. Watching
+		// the attribute directly avoids any cross-component effect-ordering race.
+		const themeObserver = new MutationObserver(() => {
+			tokens = readTokens(editor);
+		});
+		themeObserver.observe(document.documentElement, {
+			attributes: true,
+			attributeFilter: ["data-theme"],
+		});
+
 		let raf = 0;
 		const frame = () => {
 			const level = sampleLevel(performance.now());
@@ -66,6 +77,7 @@ export function DecayCanvas({ editorRef, sampleLevel }: DecayCanvasProps) {
 			cancelAnimationFrame(raf);
 			observer.disconnect();
 			mutations.disconnect();
+			themeObserver.disconnect();
 			editor.removeEventListener("scroll", invalidate);
 			window.removeEventListener("resize", resize);
 		};

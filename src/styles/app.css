@@ -9,6 +9,15 @@
 	--mono: "SF Mono", "JetBrains Mono", "Fira Code", ui-monospace, monospace;
 }
 
+/* Light theme: paper-white surface, ink-dark text, same decay-red accent — the
+   bright background makes the chromatic fringe read more sharply than on dark. */
+:root[data-theme="light"] {
+	--bg: #f7f5f0;
+	--fg: #1a1a1d;
+	--muted: #8a877f;
+	--rule: #e2ded5;
+}
+
 * {
 	box-sizing: border-box;
 }
@@ -52,8 +61,41 @@ body {
 	color: var(--muted);
 }
 
+.app__theme {
+	padding: 4px 12px;
+	min-height: 28px;
+	border: 1px solid var(--rule);
+	border-radius: 4px;
+	background: transparent;
+	color: var(--muted);
+	font: inherit;
+	letter-spacing: 0.12em;
+	text-transform: uppercase;
+	cursor: pointer;
+	transition:
+		background 160ms ease,
+		color 160ms ease,
+		border-color 160ms ease;
+}
+
+.app__theme:hover {
+	color: var(--fg);
+	background: var(--rule);
+}
+
+.app__theme:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 1px;
+}
+
 /* Intensity selector: a compact segmented control living in the top bar. */
 .settings {
+	display: flex;
+	align-items: center;
+	gap: 16px;
+}
+
+.settings__group {
 	margin: 0;
 	padding: 0;
 	border: 0;
@@ -133,6 +175,20 @@ body {
 	opacity: 0.75;
 }
 
+/* Inert v2 scaffold — visibly disabled, never interactive. */
+.settings__hardcore {
+	display: inline-flex;
+	align-items: baseline;
+	gap: 5px;
+	color: var(--muted);
+	cursor: not-allowed;
+	opacity: 0.55;
+}
+
+.settings__hardcore-box {
+	cursor: not-allowed;
+}
+
 /* Positioning context shared by the editor and the decay overlay. */
 .surface {
 	position: relative;
@@ -169,4 +225,87 @@ body {
 	width: 100%;
 	height: 100%;
 	pointer-events: none;
+}
+
+/* Session stats bar: a bottom counterpart to the top app bar. */
+.stats {
+	border-top: 1px solid var(--rule);
+	padding: 10px 20px;
+	font-family: var(--mono);
+	font-size: 12px;
+}
+
+.stats__live {
+	display: flex;
+	align-items: center;
+	gap: 28px;
+}
+
+.stat {
+	display: inline-flex;
+	align-items: baseline;
+	gap: 6px;
+}
+
+.stat__value {
+	font-weight: 700;
+	color: var(--fg);
+}
+
+.stat__label {
+	color: var(--muted);
+	letter-spacing: 0.12em;
+	text-transform: uppercase;
+	font-size: 10px;
+}
+
+.stats__copy {
+	margin-left: auto;
+	padding: 6px 14px;
+	min-height: 28px;
+	border: 1px solid var(--rule);
+	border-radius: 4px;
+	background: transparent;
+	color: var(--fg);
+	font: inherit;
+	cursor: pointer;
+	transition:
+		background 160ms ease,
+		border-color 160ms ease;
+}
+
+.stats__copy:hover {
+	background: var(--rule);
+	border-color: var(--accent);
+}
+
+.stats__copy:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 1px;
+}
+
+.stats__history {
+	width: 100%;
+	margin-top: 12px;
+	border-collapse: collapse;
+	color: var(--muted);
+}
+
+.stats__history th,
+.stats__history td {
+	text-align: left;
+	padding: 4px 12px 4px 0;
+	font-weight: 400;
+}
+
+.stats__history th {
+	color: var(--muted);
+	letter-spacing: 0.1em;
+	text-transform: uppercase;
+	font-size: 10px;
+	border-bottom: 1px solid var(--rule);
+}
+
+.stats__history td {
+	color: var(--fg);
 }

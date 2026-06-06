@@ -1,28 +1,19 @@
 import { invoke } from "@tauri-apps/api/core";
-import { type Ref, useEffect, useState } from "react";
+import type { Ref } from "react";
 
 interface EditorProps {
 	ref?: Ref<HTMLDivElement>;
+	// The active session id, owned by App; null until the launch fetch resolves.
+	sessionId: number | null;
+	// Surfaces the live plain text on every edit so App can keep a word count.
+	onTextChange: (text: string) => void;
 }
 
 // Bare contenteditable surface. Every keystroke resets the Rust idle timer via
-// `record_keystroke`. The Canvas overlay (a sibling in App) reads this element's
-// geometry through `ref`. The prose lives only in the DOM and never reaches Rust.
-export function Editor({ ref }: EditorProps) {
-	const [sessionId, setSessionId] = useState<number | null>(null);
-
-	useEffect(() => {
-		let cancelled = false;
-		invoke<number>("get_active_session_id")
-			.then((id) => {
-				if (!cancelled) setSessionId(id);
-			})
-			.catch((err) => console.error("get_active_session_id failed", err));
-		return () => {
-			cancelled = true;
-		};
-	}, []);
-
+// `record_keystroke`; every edit surfaces the plain text for the live word
+// count. The Canvas overlay (a sibling in App) reads this element's geometry
+// through `ref`. The prose lives only in the DOM and never reaches Rust.
+export function Editor({ ref, sessionId, onTextChange }: EditorProps) {
 	function handleKeyDown() {
 		if (sessionId === null) return;
 		// camelCase `sessionId` maps to the Rust `session_id` param (Tauri default).
@@ -43,6 +34,7 @@ export function Editor({ ref }: EditorProps) {
 			aria-multiline="true"
 			data-placeholder="Start writing. Don't stop."
 			onKeyDown={handleKeyDown}
+			onInput={(event) => onTextChange(event.currentTarget.innerText)}
 		/>
 	);
 }

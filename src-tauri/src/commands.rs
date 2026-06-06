@@ -16,6 +16,21 @@ use crate::session_store::{SessionStats, SessionStore};
 /// The session opened when the app launched, held in Tauri managed state.
 pub struct ActiveSession(pub i64);
 
+/// A pause longer than this (ms) is logged as a recovered decay event when the
+/// next keystroke arrives — matches the schema's "pauses > 5s" definition.
+const DECAY_EVENT_THRESHOLD_MS: u64 = 5_000;
+
+/// If `ms_idle` crossed the decay-event threshold, return the
+/// `(started_at, recovered_at)` window for the event that just recovered;
+/// `None` for a sub-threshold pause. Pure so the rule is unit-testable.
+fn recovered_decay_window(ms_idle: u64, now: i64) -> Option<(i64, i64)> {
+    if ms_idle > DECAY_EVENT_THRESHOLD_MS {
+        Some((now - ms_idle as i64, now))
+    } else {
+        None
+    }
+}
+
 /// Unix epoch milliseconds; degrades to 0 if the clock predates 1970.
 pub fn now_ms() -> i64 {
     SystemTime::now()
@@ -27,15 +42,25 @@ pub fn now_ms() -> i64 {
 }
 
 /// Reset the idle timer and log a keystroke row for the given session.
+///
+/// If the pause before this keystroke crossed the decay-event threshold, this
+/// keystroke is the recovery, so a decay event is recorded first. `peak_level`
+/// is the pre-reset level — decay is monotonic over idle time, so the level at
+/// recovery is the maximum the pause reached.
 #[tauri::command]
 pub fn record_keystroke(
     session_id: i64,
     timer: State<'_, Arc<IdleTimer>>,
     store: State<'_, Mutex<SessionStore>>,
 ) -> Result<()> {
+    let before = timer.snapshot(); // capture idle state before reset zeroes it
     timer.reset();
+    let now = now_ms();
     let store = store.lock().map_err(|_| Error::LockPoisoned)?;
-    store.record_keystroke(session_id, now_ms())
+    if let Some((started_at, recovered_at)) = recovered_decay_window(before.ms_idle, now) {
+        store.record_decay_event(session_id, started_at, recovered_at, before.level)?;
+    }
+    store.record_keystroke(session_id, now)
 }
 
 /// Return the id of the session created at launch.
@@ -66,4 +91,46 @@ pub fn set_intensity(
     store.set_intensity(active.0, intensity)?;
     timer.set_intensity(intensity);
     Ok(())
+}
+
+/// Finalize a session, stamping its end time and final word count. Fired from
+/// the webview when the window is closing.
+#[tauri::command]
+pub fn end_session(
+    session_id: i64,
+    word_count: i64,
+    store: State<'_, Mutex<SessionStore>>,
+) -> Result<()> {
+    let store = store.lock().map_err(|_| Error::LockPoisoned)?;
+    store.end_session(session_id, word_count, now_ms())
+}
+
+/// Return the most recent sessions (newest first) for the history table.
+#[tauri::command]
+pub fn get_recent_sessions(
+    limit: i64,
+    store: State<'_, Mutex<SessionStore>>,
+) -> Result<Vec<SessionStats>> {
+    let store = store.lock().map_err(|_| Error::LockPoisoned)?;
+    store.get_recent_sessions(limit)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sub_threshold_pause_records_no_event() {
+        assert_eq!(recovered_decay_window(0, 10_000), None);
+        assert_eq!(
+            recovered_decay_window(DECAY_EVENT_THRESHOLD_MS, 10_000),
+            None
+        );
+    }
+
+    #[test]
+    fn recovered_pause_yields_its_window() {
+        // 6s pause recovered at t=10_000 → started 6s earlier.
+        assert_eq!(recovered_decay_window(6_000, 10_000), Some((4_000, 10_000)));
+    }
 }
