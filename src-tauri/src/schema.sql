@@ -42,3 +42,10 @@ CREATE TABLE IF NOT EXISTS documents (
 );
 
 CREATE INDEX IF NOT EXISTS idx_documents_updated ON documents(updated_at DESC);
+
+-- v3: global key/value settings store (e.g. the hardcore-mode flag). Added via
+-- the PRAGMA user_version-gated v2→v3 migration in session_store.rs.
+CREATE TABLE IF NOT EXISTS settings (
+    key   TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+);

@@ -27,7 +27,7 @@ fn now_ms() -> i64 {
 const SCHEMA: &str = include_str!("schema.sql");
 
 /// The schema version this code targets. Migrations gate on `PRAGMA user_version`.
-const TARGET_SCHEMA_VERSION: i64 = 2;
+const TARGET_SCHEMA_VERSION: i64 = 3;
 
 /// Aggregate session statistics surfaced to the frontend (Phase 3 stats panel).
 #[derive(Debug, Clone, Serialize)]
@@ -215,10 +215,13 @@ impl SessionStore {
 
     // ── Phase 4: Documents ────────────────────────────────────────────────────
 
-    /// Apply the v1→v2 schema migration (idempotent; gates on `PRAGMA user_version`).
+    /// Apply schema migrations (idempotent; gates on `PRAGMA user_version`).
     ///
-    /// v2 adds `sessions.document_id` (FK → documents), creates a default
-    /// "Untitled" document, and backfills all existing sessions to it.
+    /// v1→v2: adds `sessions.document_id` (FK → documents), seeds an "Untitled"
+    /// document, backfills existing sessions.
+    ///
+    /// v2→v3: creates the `settings` key/value table for global app settings
+    /// (e.g. the hardcore-mode flag).
     pub fn apply_migration(&self) -> Result<()> {
         let version: i64 = self
             .conn
@@ -226,35 +229,78 @@ impl SessionStore {
         if version >= TARGET_SCHEMA_VERSION {
             return Ok(());
         }
-        let now = now_ms();
+
         let tx = self.conn.unchecked_transaction()?;
-        // Add the column only if it doesn't already exist (fresh DBs created from
-        // the v2 schema already have it; only real on-disk v1 databases are missing
-        // it). Propagate a probe failure rather than defaulting to "absent" — a
-        // swallowed error there would issue a duplicate ALTER on a v2 DB.
-        let column_count: i64 = tx.query_row(
-            "SELECT COUNT(*) FROM pragma_table_info('sessions') WHERE name = 'document_id'",
-            [],
-            |row| row.get(0),
-        )?;
-        if column_count == 0 {
-            tx.execute_batch(
-                "ALTER TABLE sessions ADD COLUMN document_id INTEGER REFERENCES documents(id)",
+
+        // ── v1 → v2 ──────────────────────────────────────────────────────────
+        if version < 2 {
+            let now = now_ms();
+            // Add the column only if it doesn't already exist (fresh DBs created from
+            // the v2 schema already have it; only real on-disk v1 databases are missing
+            // it). Propagate a probe failure rather than defaulting to "absent" — a
+            // swallowed error there would issue a duplicate ALTER on a v2 DB.
+            let column_count: i64 = tx.query_row(
+                "SELECT COUNT(*) FROM pragma_table_info('sessions') WHERE name = 'document_id'",
+                [],
+                |row| row.get(0),
+            )?;
+            if column_count == 0 {
+                tx.execute_batch(
+                    "ALTER TABLE sessions ADD COLUMN document_id INTEGER REFERENCES documents(id)",
+                )?;
+            }
+            // Create the default "Untitled" document.
+            tx.execute(
+                "INSERT INTO documents (name, body, created_at, updated_at) VALUES ('Untitled', '', ?1, ?1)",
+                [now],
+            )?;
+            let untitled_id = tx.last_insert_rowid();
+            // Backfill all existing sessions to the Untitled document.
+            tx.execute(
+                "UPDATE sessions SET document_id = ?1 WHERE document_id IS NULL",
+                [untitled_id],
             )?;
         }
-        // Create the default "Untitled" document.
-        tx.execute(
-            "INSERT INTO documents (name, body, created_at, updated_at) VALUES ('Untitled', '', ?1, ?1)",
-            [now],
-        )?;
-        let untitled_id = tx.last_insert_rowid();
-        // Backfill all existing sessions to the Untitled document.
-        tx.execute(
-            "UPDATE sessions SET document_id = ?1 WHERE document_id IS NULL",
-            [untitled_id],
-        )?;
+
+        // ── v2 → v3 ──────────────────────────────────────────────────────────
+        // Create the settings table if it doesn't exist yet. On a fresh DB the
+        // DDL in schema.sql already ran CREATE TABLE IF NOT EXISTS, so this is
+        // purely a version-bump for databases that existed at v2.
+        if version < 3 {
+            tx.execute_batch(
+                "CREATE TABLE IF NOT EXISTS settings (
+                    key   TEXT PRIMARY KEY,
+                    value TEXT NOT NULL
+                )",
+            )?;
+        }
+
         tx.pragma_update(None, "user_version", TARGET_SCHEMA_VERSION)?;
         tx.commit()?;
+        Ok(())
+    }
+
+    // ── Phase 7: Settings (global key/value store) ────────────────────────────
+
+    /// Read a setting by key; returns `None` if the key is absent.
+    pub fn get_setting(&self, key: &str) -> Result<Option<String>> {
+        let mut stmt = self
+            .conn
+            .prepare("SELECT value FROM settings WHERE key = ?1")?;
+        let mut rows = stmt.query([key])?;
+        match rows.next()? {
+            Some(row) => Ok(Some(row.get(0)?)),
+            None => Ok(None),
+        }
+    }
+
+    /// Upsert a setting (insert or replace on key conflict).
+    pub fn set_setting(&self, key: &str, value: &str) -> Result<()> {
+        self.conn.execute(
+            "INSERT INTO settings (key, value) VALUES (?1, ?2)
+             ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            (key, value),
+        )?;
         Ok(())
     }
 
@@ -688,5 +734,88 @@ mod tests {
 
         // Resolving must not create a spurious extra document.
         assert_eq!(store.list_documents().expect("list").len(), 2);
+    }
+
+    // ── Phase 7: Settings (v2→v3 migration + key/value helpers) ─────────────
+
+    #[test]
+    fn settings_round_trip() {
+        let store = SessionStore::open_in_memory().expect("open");
+        store.apply_migration().expect("migrate");
+
+        assert_eq!(
+            store.get_setting("hardcore").expect("get absent"),
+            None,
+            "absent key returns None"
+        );
+
+        store.set_setting("hardcore", "true").expect("set");
+        assert_eq!(
+            store.get_setting("hardcore").expect("get present"),
+            Some("true".into())
+        );
+    }
+
+    #[test]
+    fn settings_upsert_overwrites() {
+        let store = SessionStore::open_in_memory().expect("open");
+        store.apply_migration().expect("migrate");
+
+        store.set_setting("hardcore", "false").expect("set false");
+        store.set_setting("hardcore", "true").expect("set true");
+
+        assert_eq!(
+            store.get_setting("hardcore").expect("get"),
+            Some("true".into()),
+            "upsert must overwrite previous value"
+        );
+    }
+
+    #[test]
+    fn v2_to_v3_migration_creates_settings_table() {
+        // Simulate a v2 database: apply schema (which includes settings DDL for
+        // fresh DBs), then forcibly reset user_version to 2 so apply_migration
+        // runs the v2→v3 branch on an already-configured schema.
+        let store = SessionStore::open_in_memory().expect("open");
+        store.apply_migration().expect("first migrate to v3");
+
+        // Downgrade version to 2 to re-exercise the v2→v3 path.
+        store
+            .conn
+            .pragma_update(None, "user_version", 2i64)
+            .expect("set version to 2");
+
+        store
+            .apply_migration()
+            .expect("v2→v3 must succeed on already-existing settings table");
+
+        let ver: i64 = store
+            .conn
+            .pragma_query_value(None, "user_version", |r| r.get(0))
+            .expect("user_version");
+        assert_eq!(ver, TARGET_SCHEMA_VERSION, "version bumped to v3");
+
+        // Settings table is functional after the migration.
+        store
+            .set_setting("hardcore", "true")
+            .expect("set after v2→v3");
+        assert_eq!(
+            store.get_setting("hardcore").expect("get"),
+            Some("true".into())
+        );
+    }
+
+    #[test]
+    fn migration_v3_is_idempotent() {
+        // Running apply_migration twice on a v3 DB must be a no-op.
+        let store = SessionStore::open_in_memory().expect("open");
+        store.apply_migration().expect("first");
+        store.apply_migration().expect("second — must not error");
+
+        let ver: i64 = store
+            .conn
+            .pragma_query_value(None, "user_version", |r| r.get(0))
+            .expect("user_version");
+        assert_eq!(ver, TARGET_SCHEMA_VERSION);
     }
 }

@@ -52,6 +52,16 @@ impl Intensity {
             _ => None,
         }
     }
+
+    /// Milliseconds between successive destruction bites when held at full decay
+    /// in hardcore mode. Brutal eats fastest; Gentle is the most forgiving.
+    pub fn bite_cadence_ms(self) -> u64 {
+        match self {
+            Intensity::Brutal => 1_000,
+            Intensity::Normal => 2_000,
+            Intensity::Gentle => 3_000,
+        }
+    }
 }
 
 /// Live decay snapshot carried by the `decay-update` event.
@@ -63,6 +73,18 @@ pub struct DecayUpdate {
     pub ms_idle: u64,
     pub intensity: Intensity,
 }
+
+/// Payload for the `decay-bite` event (hardcore mode: text was destroyed).
+///
+/// `seq` is a monotonically-increasing counter so the frontend can detect
+/// dropped events (e.g. under IPC backpressure); starts at 1 on first bite.
+#[derive(Debug, Clone, Serialize)]
+pub struct DecayBite {
+    pub seq: u64,
+}
+
+/// Event name for hardcore-mode destruction bites.
+pub const DECAY_BITE_EVENT: &str = "decay-bite";
 
 /// Map idle milliseconds to a decay level in `[0.0, 1.0]`.
 ///
@@ -126,5 +148,22 @@ mod tests {
             "\"brutal\""
         );
         assert_eq!(Intensity::Gentle.as_str(), "gentle");
+    }
+
+    #[test]
+    fn bite_cadence_brutal_fastest() {
+        assert_eq!(Intensity::Brutal.bite_cadence_ms(), 1_000);
+        assert_eq!(Intensity::Normal.bite_cadence_ms(), 2_000);
+        assert_eq!(Intensity::Gentle.bite_cadence_ms(), 3_000);
+        // Brutal < Normal < Gentle (faster bites = shorter cadence).
+        assert!(Intensity::Brutal.bite_cadence_ms() < Intensity::Normal.bite_cadence_ms());
+        assert!(Intensity::Normal.bite_cadence_ms() < Intensity::Gentle.bite_cadence_ms());
+    }
+
+    #[test]
+    fn decay_bite_serializes_seq() {
+        let bite = super::DecayBite { seq: 42 };
+        let json = serde_json::to_string(&bite).unwrap();
+        assert!(json.contains("42"), "seq must appear in payload");
     }
 }

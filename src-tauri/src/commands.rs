@@ -207,6 +207,26 @@ pub fn start_document_session(
     store.start_session_for_document(timer.intensity(), now_ms(), document_id)
 }
 
+// ── Phase 7: Hardcore mode ───────────────────────────────────────────────────
+
+/// Enable or disable hardcore mode globally.
+///
+/// Persists the flag to `settings("hardcore")` first (so a crash between persist
+/// and retune leaves the DB and the live timer consistent — both old value),
+/// then retuens the live timer. Mirrors the `persist-then-retune` ordering used
+/// by `set_intensity`.
+#[tauri::command]
+pub fn set_hardcore(
+    enabled: bool,
+    timer: State<'_, Arc<IdleTimer>>,
+    store: State<'_, Mutex<SessionStore>>,
+) -> Result<()> {
+    let store = store.lock().map_err(|_| Error::LockPoisoned)?;
+    store.set_setting("hardcore", if enabled { "true" } else { "false" })?;
+    timer.set_hardcore(enabled);
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

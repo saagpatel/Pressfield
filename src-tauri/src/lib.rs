@@ -21,21 +21,32 @@ use decay::Intensity;
 use idle_timer::IdleTimer;
 use session_store::{default_db_path, SessionStore};
 
+/// SQLite key for the global hardcore-mode flag.
+const HARDCORE_KEY: &str = "hardcore";
+
 /// Build and run the Tauri application.
 pub fn run() -> anyhow::Result<()> {
     tauri::Builder::default()
         .setup(|app| {
-            // Open the store, run the v1→v2 migration (idempotent after the first
-            // v2 launch), then resolve the document this launch opens into and
-            // start its session.
+            // Open the store, run migrations (idempotent), then resolve the
+            // document this launch opens into and start its session.
             let store = SessionStore::open(&default_db_path()?)?;
             store.apply_migration()?;
             let document_id = store.resolve_active_document()?;
             let session_id =
                 store.start_session_for_document(Intensity::Normal, now_ms(), document_id)?;
 
-            // Spawn the decay clock; it emits `decay-update` at 10 Hz.
+            // Restore the persisted hardcore flag so the timer starts in the
+            // correct state without requiring a UI interaction on launch.
+            let hardcore_enabled = store
+                .get_setting(HARDCORE_KEY)?
+                .map(|v| v == "true")
+                .unwrap_or(false);
+
+            // Spawn the decay clock; it emits `decay-update` at 10 Hz and,
+            // when hardcore is on at full decay, `decay-bite` at the cadence.
             let timer = Arc::new(IdleTimer::new(Intensity::Normal));
+            timer.set_hardcore(hardcore_enabled);
             idle_timer::spawn(app.handle().clone(), timer.clone());
 
             app.manage(timer);
@@ -43,6 +54,18 @@ pub fn run() -> anyhow::Result<()> {
             app.manage(ActiveSession(session_id));
             app.manage(ActiveDocument(document_id));
             Ok(())
+        })
+        .on_window_event({
+            // Wire window focus/blur → timer.set_focused so the hardcore pause
+            // logic tracks whether the app window is in the foreground.
+            // We clone the app handle; the timer is retrieved from managed state.
+            |window, event| {
+                if let tauri::WindowEvent::Focused(focused) = event {
+                    if let Some(timer) = window.app_handle().try_state::<Arc<IdleTimer>>() {
+                        timer.set_focused(*focused);
+                    }
+                }
+            }
         })
         .invoke_handler(tauri::generate_handler![
             commands::record_keystroke,
@@ -59,7 +82,8 @@ pub fn run() -> anyhow::Result<()> {
             commands::list_documents,
             commands::get_active_document,
             commands::start_document_session,
-            commands::get_recent_document_sessions
+            commands::get_recent_document_sessions,
+            commands::set_hardcore
         ])
         .run(tauri::generate_context!())
         .map_err(|e| anyhow::anyhow!("tauri runtime error: {e}"))?;
