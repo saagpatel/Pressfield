@@ -1,5 +1,10 @@
 # Pressfield — Implementation Plan
 
+> Historical note, 2026-06-06: this is the original v1 implementation plan. v2 Arc 1 has since
+> added local document persistence in SQLite (`documents.body`) so prose now survives close and
+> reopen. Treat v1 "content never persisted" language below as historical unless it is explicitly
+> restated in `CLAUDE.md`, `README.md`, or `IMPLEMENTATION-ROADMAP.md`.
+
 > A local-first Tauri 2 writing app where prose physically decays during idle time. Typographic entropy punishes every pause — fonts corrupt, glyph edges bleed, words drift, opacity fades — while the underlying text survives intact. The only adversarial creative tool in the operator's 58-project portfolio.
 
 ---
@@ -584,8 +589,8 @@ xcode-select --install
 
 - **Credential storage:** None in scope. Pressfield authenticates nothing and stores no secrets. There are no API keys, tokens, or passwords anywhere in the system.
 - **Data boundaries:** Nothing leaves the machine. The hard constraint in 2c forbids all outbound network calls. Session data persists only to `~/.pressfield/pressfield.db`. The only network surface is Vite's HMR server, which is development-only and loopback-bound; it is absent from production builds.
-- **Encryption at rest:** None in v1. The SQLite database contains only word counts, keystroke timestamps, and decay event records — no document content. The actual prose lives in the `contenteditable` DOM and is never written to disk by Pressfield. The operator's FileVault covers the DB file. This is a deliberate v1 decision.
-- **Content never persisted:** The prose the user types is held only in the `contenteditable` DOM and is never sent to Rust, never written to SQLite, and never written to the filesystem by Pressfield. "Copy clean text" copies to the clipboard and nothing else. This is a privacy-by-design constraint.
+- **Encryption at rest:** Historical v1 posture: the SQLite database contained only word counts, keystroke timestamps, and decay event records — no document content. Current v2 Arc 1 posture: clean prose is intentionally persisted locally in SQLite document bodies so writing survives app restarts. The app remains zero-network; local disk protection depends on the operator's FileVault/device security.
+- **Content persistence:** Historical v1 posture: prose lived only in the `contenteditable` DOM and was never written by Pressfield. Current v2 Arc 1 posture: autosave writes clean prose to `documents.body`; decay remains visual-only and does not save corrupted/decayed text.
 - **Token rotation:** Not applicable — no tokens anywhere in the system.
 - **IPC trust boundary:** The Tauri IPC bridge is local; there is no authentication on Tauri commands. This is acceptable because the only IPC callers are the app's own webview. Tauri 2's capability system restricts which commands are exposed to the webview; `tauri.conf.json` must enumerate only the commands defined in `commands.rs`.
 - **Hardcore mode deferred:** The v2 feature (permanent text mutation) will require an explicit user consent flow, a confirmation dialog, and clear warnings before it may be wired to any code path. No mechanism for this exists in v1.

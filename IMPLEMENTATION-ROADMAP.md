@@ -388,6 +388,8 @@ documents (NEW)                  sessions (MODIFIED)
 
 ## Phase 4: Persistence Foundation (Rust / data layer)
 
+**Status:** Complete in commits `9f9b158` and `fab8746`; reported green in the 2026-06-06 Arc 1 handoff.
+
 **Objective:** `documents` table + versioned `user_version` migration (v1→v2) with backfill; document CRUD Tauri commands; `sessions.document_id` FK; per-document stats query. No UI — commands tested directly via `cargo test`.
 
 **Tasks:**
@@ -397,12 +399,12 @@ documents (NEW)                  sessions (MODIFIED)
 4. Per-document stats — extend the stats query so `get_stats` / `get_recent_sessions` filter by `document_id` — Acceptance: two docs each with their own sessions → each doc's history returns only its own sessions, newest first.
 
 **Verification checklist:**
-- [ ] `documents` table present; `schema.sql` comment no longer claims "never prose"
-- [ ] v1→v2 migration runs once, backfills to Untitled, idempotent on re-open
-- [ ] All five CRUD commands unit-tested against in-memory DB
-- [ ] `save_document` bumps `updated_at`; round-trips body exactly
-- [ ] Per-document stats: history filters to the active doc
-- [ ] `cargo test` → all pass (19 existing + new)
+- [x] `documents` table present; `schema.sql` comment no longer claims "never prose"
+- [x] v1→v2 migration runs once, backfills to Untitled, idempotent on re-open
+- [x] All five CRUD commands unit-tested against in-memory DB
+- [x] `save_document` bumps `updated_at`; round-trips body exactly
+- [x] Per-document stats: history filters to the active doc
+- [x] `cargo test` -> all pass (32 cargo tests reported)
 
 **Risks:**
 - `ALTER TABLE` running twice → "duplicate column" panic: strictly gate behind `user_version < 2`; never put the ALTER in `schema.sql`.
@@ -414,6 +416,8 @@ documents (NEW)                  sessions (MODIFIED)
 
 ## Phase 5: Autosave + Active Document (wiring)
 
+**Status:** Complete in commit `4758b43`; logic/test gates passed. Human visual pass remains open.
+
 **Objective:** The persistence milestone — close the app, reopen, the prose is there. Debounced autosave, editor hydration from saved `body`, and `sessionId` bound to the active document.
 
 **Tasks:**
@@ -422,11 +426,11 @@ documents (NEW)                  sessions (MODIFIED)
 3. Decay-safe save — confirm autosave persists clean `innerText`, never a decayed snapshot (decay is canvas-overlay only; the contenteditable already holds clean text) — Acceptance: trigger heavy decay, let autosave fire mid-decay, reopen → prose is clean, not corrupted.
 
 **Verification checklist:**
-- [ ] Relaunch hydrates the editor from saved body
-- [ ] Autosave fires on debounce + blur + close
-- [ ] Kill-and-reopen loses ≤1 debounce window of text
-- [ ] Autosave during active decay persists clean prose, not distortion
-- [ ] `pnpm vitest run` + `cargo test` → all pass
+- [x] Relaunch hydrates the editor from saved body
+- [x] Autosave fires on debounce + blur + close
+- [x] Kill-and-reopen loses <=1 debounce window of text
+- [x] Autosave during active decay persists clean prose, not distortion
+- [x] `pnpm vitest run` + `cargo test` -> all pass (57 vitest + 32 cargo tests reported)
 - [ ] Operator visual check: type, close, reopen — text is there
 
 **Risks:**
@@ -439,6 +443,8 @@ documents (NEW)                  sessions (MODIFIED)
 
 ## Phase 6: Named Documents UI (command palette)
 
+**Status:** Complete in commit `660816a`; build/test gates passed. Human visual pass remains open.
+
 **Objective:** Multiple documents, switchable via a Cmd+O command palette; per-document stats on switch; create/rename/delete from the same surface.
 
 **Tasks:**
@@ -448,13 +454,13 @@ documents (NEW)                  sessions (MODIFIED)
 4. UI standards — palette honors `frontend-web-baseline` (non-default typography, accent color, 8px grid, visible focus states, hover transitions, skeleton/empty states) and both themes — Acceptance: palette renders correctly on dark + light; empty state (single Untitled doc) reads intentional, not broken.
 
 **Verification checklist:**
-- [ ] Cmd+O opens; fuzzy filter; Enter switches; Esc dismisses
-- [ ] Switch flushes + ends outgoing session, hydrates + starts incoming
-- [ ] Per-document stats + history follow the active doc
-- [ ] Create / rename / delete all work; delete lands sensibly
-- [ ] Palette honors both themes + `frontend-web-baseline`
-- [ ] `pnpm vitest run` + `cargo test` → all pass
-- [ ] `cargo tauri build` → bundle produced
+- [x] Cmd+O opens; fuzzy filter; Enter switches; Esc dismisses
+- [x] Switch flushes + ends outgoing session, hydrates + starts incoming
+- [x] Per-document stats + history follow the active doc
+- [x] Create / rename / delete all work; delete lands sensibly
+- [x] Palette honors both themes + `frontend-web-baseline`
+- [x] `pnpm vitest run` + `cargo test` -> all pass (57 vitest + 32 cargo tests reported)
+- [x] `cargo tauri build` -> bundle produced
 - [ ] Operator visual check: full multi-doc round-trip
 
 **Risks:**
@@ -466,5 +472,5 @@ documents (NEW)                  sessions (MODIFIED)
 ---
 
 ## v2 — Later Arcs (not yet scoped)
-- **Arc 2 — Hardcore mode:** text permanently lost when decayed beyond threshold. Separate ethical/UX contract; designed *on top of* persistence (the save/decay knot: save the corpse or the original?). Toggle stays OFF by default.
+- **Arc 2 — Hardcore mode:** next planning arc. Text may be permanently lost when decayed beyond threshold, so resolve the ethical/UX contract first (the save/decay knot: save the corpse or the original?). Toggle stays OFF by default.
 - **Arc 3 — Custom decay-curve editor:** let writers tune the decay math (currently quadratic t², authoritative in `decay.rs::decay_level` / `decayMath.ts::levelFromMs`). Power-user polish; lowest stakes.
