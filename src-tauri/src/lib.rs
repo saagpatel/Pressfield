@@ -61,8 +61,15 @@ pub fn run() -> anyhow::Result<()> {
             // We clone the app handle; the timer is retrieved from managed state.
             |window, event| {
                 if let tauri::WindowEvent::Focused(focused) = event {
-                    if let Some(timer) = window.app_handle().try_state::<Arc<IdleTimer>>() {
-                        timer.set_focused(*focused);
+                    match window.app_handle().try_state::<Arc<IdleTimer>>() {
+                        Some(timer) => timer.set_focused(*focused),
+                        // Before `manage(timer)` commits during setup the state
+                        // is absent; log rather than silently drop the event so a
+                        // missed pause-on-blur is observable. Default `focused =
+                        // true` keeps the pre-setup state safe.
+                        None => {
+                            eprintln!("focus event dropped: IdleTimer not yet in managed state")
+                        }
                     }
                 }
             }

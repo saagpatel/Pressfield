@@ -213,7 +213,7 @@ pub fn start_document_session(
 ///
 /// Persists the flag to `settings("hardcore")` first (so a crash between persist
 /// and retune leaves the DB and the live timer consistent — both old value),
-/// then retuens the live timer. Mirrors the `persist-then-retune` ordering used
+/// then retunes the live timer. Mirrors the `persist-then-retune` ordering used
 /// by `set_intensity`.
 #[tauri::command]
 pub fn set_hardcore(

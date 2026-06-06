@@ -806,6 +806,59 @@ mod tests {
     }
 
     #[test]
+    fn migration_runs_v1_through_to_v3_in_one_pass() {
+        // A genuine v1 on-disk DB upgraded in a single apply_migration() call must
+        // run BOTH the v1→v2 and v2→v3 branches: re-add document_id, seed/backfill
+        // the Untitled document, AND create the settings table. This combined path
+        // is newly exercised by P7 and was previously only covered one hop at a
+        // time.
+        let store = SessionStore::open_in_memory().expect("open");
+        store
+            .conn
+            .execute_batch(
+                "ALTER TABLE sessions DROP COLUMN document_id;
+                 DELETE FROM documents;
+                 DROP TABLE settings;
+                 PRAGMA user_version = 0;",
+            )
+            .expect("downgrade to v1 shape");
+        let session_id = store
+            .start_session(Intensity::Normal, 1_000)
+            .expect("v1 session");
+
+        store.apply_migration().expect("migrate v1→v3");
+
+        // Landed at v3.
+        let ver: i64 = store
+            .conn
+            .pragma_query_value(None, "user_version", |r| r.get(0))
+            .expect("user_version");
+        assert_eq!(
+            ver, TARGET_SCHEMA_VERSION,
+            "v1 DB migrated all the way to v3"
+        );
+
+        // v1→v2 effects: column re-added, v1 session backfilled, one Untitled.
+        let stats = store.get_stats(session_id).expect("stats");
+        assert!(
+            stats.document_id.is_some(),
+            "v1 session backfilled to a document"
+        );
+        let docs = store.list_documents().expect("list");
+        assert_eq!(docs.len(), 1);
+        assert_eq!(docs[0].name, "Untitled");
+
+        // v2→v3 effect: settings table created and functional.
+        store
+            .set_setting("hardcore", "true")
+            .expect("settings usable after v1→v3");
+        assert_eq!(
+            store.get_setting("hardcore").expect("get"),
+            Some("true".into())
+        );
+    }
+
+    #[test]
     fn migration_v3_is_idempotent() {
         // Running apply_migration twice on a v3 DB must be a no-op.
         let store = SessionStore::open_in_memory().expect("open");

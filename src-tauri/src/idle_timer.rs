@@ -8,9 +8,14 @@
 //! - Pause on window blur: when `focused = false` and `hardcore = true`, the
 //!   tick thread does NOT advance `ms_idle` (resume-not-reset on refocus).
 //! - Bite cadence: once `level ≥ 1.0` and `hardcore && focused`, the thread
-//!   accumulates `ms_since_bite`; each time it crosses [`Intensity::bite_cadence_ms`]
-//!   a `decay-bite` event is emitted and the accumulator wraps by the cadence so
-//!   ticks land cleanly even under scheduler jitter.
+//!   accumulates toward [`Intensity::bite_cadence_ms`]; each time it crosses the
+//!   cadence a `decay-bite` event is emitted and the remainder carries forward
+//!   so ticks land cleanly under scheduler jitter.
+//!
+//! [`IdleTimer::tick`] derives both the pause decision and bite eligibility from
+//! a single read of the `hardcore`/`focused` flags, so the two can never
+//! disagree within one tick. The cadence arithmetic lives in the pure
+//! [`advance_bite_accumulator`] free function, which the tests exercise directly.
 
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicU8, Ordering};
 use std::sync::Arc;
@@ -26,6 +31,15 @@ pub const TICK_MS: u64 = 100;
 
 /// Event name carrying [`DecayUpdate`] payloads to the webview.
 pub const DECAY_EVENT: &str = "decay-update";
+
+/// The result of one clock tick: the snapshot to emit, plus whether this tick
+/// is eligible to advance the bite cadence. Both are derived from a single
+/// coherent read of the `hardcore`/`focused` flags inside [`IdleTimer::tick`],
+/// so the pause decision and bite eligibility can never disagree within a tick.
+pub struct TickOutcome {
+    pub update: DecayUpdate,
+    pub bite_eligible: bool,
+}
 
 /// Lock-free idle counter shared between the tick thread and command handlers.
 ///
@@ -94,22 +108,36 @@ impl IdleTimer {
         self.focused.load(Ordering::SeqCst)
     }
 
-    /// Advance the counter by `dt_ms` (only if not paused) and return the
-    /// resulting snapshot.
+    /// Advance the clock by one tick and report the snapshot plus bite
+    /// eligibility, both derived from a single read of the hardcore/focused
+    /// flags.
     ///
     /// Pauses when `hardcore && !focused` — the idle clock freezes on blur so
     /// decay does not progress while the user is away from the app's window.
     /// When hardcore is OFF, blur has no effect (v1/Arc-1 behaviour preserved).
-    pub fn advance(&self, dt_ms: u64) -> DecayUpdate {
+    pub fn tick(&self, dt_ms: u64) -> TickOutcome {
         let hardcore = self.hardcore.load(Ordering::SeqCst);
         let focused = self.focused.load(Ordering::SeqCst);
         let ms_idle = if hardcore && !focused {
-            // Paused: return current state without advancing the clock.
-            self.ms_idle.load(Ordering::SeqCst)
+            self.ms_idle.load(Ordering::SeqCst) // paused: do not advance
         } else {
             self.ms_idle.fetch_add(dt_ms, Ordering::SeqCst) + dt_ms
         };
-        self.snapshot_at(ms_idle)
+        let update = self.snapshot_at(ms_idle);
+        // Bite-eligible only while held at full decay, focused, in hardcore —
+        // computed from the SAME flag read as the pause decision above.
+        let bite_eligible = hardcore && focused && update.level >= 1.0;
+        TickOutcome {
+            update,
+            bite_eligible,
+        }
+    }
+
+    /// Advance the counter by `dt_ms` and return just the snapshot. Thin wrapper
+    /// over [`tick`](Self::tick) for callers (and tests) that don't need the
+    /// bite-eligibility signal.
+    pub fn advance(&self, dt_ms: u64) -> DecayUpdate {
+        self.tick(dt_ms).update
     }
 
     /// Current snapshot without advancing the clock.
@@ -127,40 +155,52 @@ impl IdleTimer {
     }
 }
 
+/// Advance the bite-cadence accumulator by one tick.
+///
+/// Returns the new accumulator and whether a bite fires this tick. When
+/// `eligible` is false the accumulator resets to zero — the cadence window only
+/// runs while the timer is held at full decay, focused, in hardcore mode. On a
+/// fire the remainder carries forward (`acc - cadence`) rather than zeroing, so
+/// scheduler jitter never drops or double-counts a bite. `cadence` is always
+/// positive (see [`Intensity::bite_cadence_ms`]); a single 100 ms tick can lift
+/// `acc` at most one cadence-worth over the threshold, so one fire per tick.
+fn advance_bite_accumulator(acc: u64, dt_ms: u64, eligible: bool, cadence: u64) -> (u64, bool) {
+    if !eligible {
+        return (0, false);
+    }
+    let acc = acc + dt_ms;
+    if acc >= cadence {
+        (acc - cadence, true)
+    } else {
+        (acc, false)
+    }
+}
+
 /// Spawn the 100 ms tick thread that emits `decay-update` (and, in hardcore
 /// mode at full decay, `decay-bite`) on `app`.
 pub fn spawn(app: AppHandle, timer: Arc<IdleTimer>) {
     thread::spawn(move || {
         // Emit a crisp baseline immediately so the UI has state before tick 1.
         emit_update(&app, timer.snapshot());
-        // Thread-local bite accumulator: ms spent at full decay this cadence.
+        // Accumulated ms at full decay toward the next bite, and a
+        // monotonically-increasing bite sequence number.
         let mut ms_since_bite: u64 = 0;
-        // Monotonically-increasing sequence number for bite events.
         let mut bite_seq: u64 = 0;
         loop {
             thread::sleep(Duration::from_millis(TICK_MS));
-            let update = timer.advance(TICK_MS);
-            emit_update(&app, update.clone());
+            let TickOutcome {
+                update,
+                bite_eligible,
+            } = timer.tick(TICK_MS);
+            emit_update(&app, update);
 
-            // Hardcore bite logic: only when hardcore on, window focused, and
-            // fully decayed (level ≥ 1.0). When any condition is absent, reset
-            // the accumulator so ticks don't carry over from a non-bite window.
-            let hardcore = timer.hardcore.load(Ordering::SeqCst);
-            let focused = timer.focused.load(Ordering::SeqCst);
-            if hardcore && focused && update.level >= 1.0 {
-                ms_since_bite += TICK_MS;
-                let cadence = timer.intensity().bite_cadence_ms();
-                if ms_since_bite >= cadence {
-                    // Wrap by cadence rather than reset to zero so jitter
-                    // doesn't cause double-fire on slow ticks.
-                    ms_since_bite = ms_since_bite.saturating_sub(cadence);
-                    bite_seq += 1;
-                    emit_bite(&app, DecayBite { seq: bite_seq });
-                }
-            } else {
-                // Not in bite-eligible state: clear the accumulator so the
-                // cadence window starts fresh next time we enter full decay.
-                ms_since_bite = 0;
+            let cadence = timer.intensity().bite_cadence_ms();
+            let (acc, fired) =
+                advance_bite_accumulator(ms_since_bite, TICK_MS, bite_eligible, cadence);
+            ms_since_bite = acc;
+            if fired {
+                bite_seq += 1;
+                emit_bite(&app, DecayBite { seq: bite_seq });
             }
         }
     });
@@ -285,60 +325,101 @@ mod tests {
         assert!(timer.focused(), "window assumed focused at launch");
     }
 
-    // ── Hardcore: cadence math (tick-level, no AppHandle needed) ─────────────
-    //
-    // The bite emission logic lives in the spawn() closure and therefore needs an
-    // AppHandle to test end-to-end. What we can unit-test here is the pure math:
-    // does `ms_since_bite` cross the cadence at the expected tick count?
+    // ── Hardcore: bite accumulator (pure, exercises the real cadence logic) ────
 
     #[test]
-    fn bite_cadence_brutal_fires_after_ten_ticks() {
-        // Brutal cadence = 1000ms, tick = 100ms → fire after 10 ticks.
+    fn bite_accumulator_resets_when_ineligible() {
+        // A half-filled accumulator clears the instant we leave the bite-eligible
+        // state (e.g. a keystroke drops level below full decay, or the window
+        // blurs). This is the real reset path used by the tick loop.
+        let (acc, fired) = advance_bite_accumulator(500, TICK_MS, false, 1_000);
+        assert_eq!(acc, 0);
+        assert!(!fired);
+    }
+
+    #[test]
+    fn bite_accumulator_builds_without_firing_below_cadence() {
+        let (acc, fired) = advance_bite_accumulator(800, TICK_MS, true, 1_000);
+        assert_eq!(acc, 900);
+        assert!(!fired);
+    }
+
+    #[test]
+    fn bite_accumulator_fires_and_carries_remainder() {
+        // 950 + 100 = 1050 ≥ 1000 → fire, remainder 50 carries into next window.
+        let (acc, fired) = advance_bite_accumulator(950, TICK_MS, true, 1_000);
+        assert_eq!(acc, 50);
+        assert!(fired);
+    }
+
+    #[test]
+    fn bite_accumulator_brutal_fires_every_ten_ticks() {
+        // Drive the REAL accumulator across 30 ticks at brutal's 1000ms cadence.
         let cadence = Intensity::Brutal.bite_cadence_ms();
-        let mut acc: u64 = 0;
+        let mut acc = 0u64;
         let mut fires = 0u64;
         for _ in 0..30 {
-            acc += TICK_MS;
-            if acc >= cadence {
-                acc = acc.saturating_sub(cadence);
+            let (next, fired) = advance_bite_accumulator(acc, TICK_MS, true, cadence);
+            acc = next;
+            if fired {
                 fires += 1;
             }
         }
-        // 30 ticks × 100ms = 3000ms / 1000ms cadence = 3 fires.
-        assert_eq!(fires, 3);
+        assert_eq!(fires, 3); // 3000ms / 1000ms
+        assert_eq!(acc, 0, "30 ticks land cleanly on a cadence boundary");
     }
 
     #[test]
-    fn bite_cadence_gentle_fires_after_thirty_ticks() {
-        // Gentle cadence = 3000ms, tick = 100ms → fire after 30 ticks.
+    fn bite_accumulator_gentle_fires_every_thirty_ticks() {
         let cadence = Intensity::Gentle.bite_cadence_ms();
-        let mut acc: u64 = 0;
+        let mut acc = 0u64;
         let mut fires = 0u64;
         for _ in 0..90 {
-            acc += TICK_MS;
-            if acc >= cadence {
-                acc = acc.saturating_sub(cadence);
+            let (next, fired) = advance_bite_accumulator(acc, TICK_MS, true, cadence);
+            acc = next;
+            if fired {
                 fires += 1;
             }
         }
-        // 90 ticks × 100ms = 9000ms / 3000ms cadence = 3 fires.
-        assert_eq!(fires, 3);
+        assert_eq!(fires, 3); // 9000ms / 3000ms
+    }
+
+    // ── Hardcore: tick() bite-eligibility (single-read gating) ─────────────────
+
+    #[test]
+    fn tick_not_bite_eligible_below_full_decay() {
+        let timer = IdleTimer::new(Intensity::Normal);
+        timer.set_hardcore(true);
+        let outcome = timer.tick(1_000); // 1000/5000 → t=0.2 → level 0.04
+        assert!(!outcome.bite_eligible);
     }
 
     #[test]
-    fn accumulator_resets_when_level_drops_below_full() {
-        // When the level < 1.0 (e.g. after a keystroke), ms_since_bite should
-        // reset so partial accumulation doesn't carry into the next full-decay
-        // window. This is the logic in the else branch of spawn(); here we verify
-        // the same arithmetic inline.
-        let mut ms_since_bite: u64 = 500; // half-accumulated
-        let level: f32 = 0.5; // not at full decay
-        if !(level >= 1.0) {
-            ms_since_bite = 0;
-        }
-        assert_eq!(
-            ms_since_bite, 0,
-            "accumulator must clear when not at full decay"
+    fn tick_bite_eligible_at_full_decay_in_hardcore() {
+        let timer = IdleTimer::new(Intensity::Brutal);
+        timer.set_hardcore(true);
+        let outcome = timer.tick(2_000); // brutal full window → level 1.0
+        assert!(outcome.bite_eligible);
+    }
+
+    #[test]
+    fn tick_not_bite_eligible_when_hardcore_off() {
+        let timer = IdleTimer::new(Intensity::Brutal);
+        // hardcore off by default
+        let outcome = timer.tick(2_000); // full decay, but not hardcore
+        assert!(!outcome.bite_eligible);
+    }
+
+    #[test]
+    fn tick_not_bite_eligible_when_blurred() {
+        let timer = IdleTimer::new(Intensity::Brutal);
+        timer.set_hardcore(true);
+        timer.advance(2_000); // reach full decay while focused
+        timer.set_focused(false); // blur
+        let outcome = timer.tick(100); // paused + ineligible
+        assert!(
+            !outcome.bite_eligible,
+            "blur makes the tick bite-ineligible"
         );
     }
 }
