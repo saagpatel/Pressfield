@@ -1,7 +1,7 @@
 {
 	"project": "Pressfield",
-	"current_phase": 1,
-	"updated_at": "2026-06-02",
+	"current_phase": 2,
+	"updated_at": "2026-06-06",
 	"phases": [
 		{
 			"phase": 0,
@@ -70,32 +70,32 @@
 		{
 			"phase": 2,
 			"name": "Decay Tuning, Intensity Setting, Word Drift, Robustness",
-			"status": "pending",
+			"status": "done",
 			"tasks": [
 				{
 					"id": "2.1",
 					"name": "Word drift in DecayRenderer (Knuth-seeded per-word vector)",
-					"status": "pending"
+					"status": "done"
 				},
 				{
 					"id": "2.2",
 					"name": "Chromatic aberration fringe at level > 0.5",
-					"status": "pending"
+					"status": "done"
 				},
 				{
 					"id": "2.3",
-					"name": "decayMath.ts levelFromMs cubic ease-in",
-					"status": "pending"
+					"name": "decayMath.ts levelFromMs quadratic ease-in (Rust-authoritative curve)",
+					"status": "done"
 				},
 				{
 					"id": "2.4",
 					"name": "SettingsPanel.tsx intensity selector + set_intensity IPC",
-					"status": "pending"
+					"status": "done"
 				},
 				{
 					"id": "2.5",
 					"name": "MutationObserver word-box cache + re-sync on paste/undo/resize",
-					"status": "pending"
+					"status": "done"
 				}
 			]
 		},

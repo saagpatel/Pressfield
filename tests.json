@@ -1,6 +1,6 @@
 {
 	"project": "Pressfield",
-	"updated_at": "2026-06-02",
+	"updated_at": "2026-06-06",
 	"runners": {
 		"rust": "cargo test --manifest-path src-tauri/Cargo.toml",
 		"frontend": "pnpm vitest run"
@@ -163,30 +163,42 @@
 			]
 		},
 		"2": {
-			"planned": [
+			"implemented": [
 				{
-					"id": "fe-decaymath-cubic",
+					"id": "fe-decaymath-quadratic",
 					"file": "src/__tests__/decayMath.test.ts",
-					"case": "levelFromMs cubic: 0->0.0, 2500->~0.25, 5000->1.0, strictly increasing",
-					"status": "planned"
+					"case": "levelFromMs quadratic: 0->0.0, 2500->~0.25, 5000->1.0, strictly increasing; intensity scales window",
+					"status": "passing"
 				},
 				{
 					"id": "fe-drift-deterministic",
 					"file": "src/__tests__/decay.test.ts",
-					"case": "word drift vector consistent per index across frames",
-					"status": "planned"
+					"case": "driftVector deterministic per index, zero at rest, bounded +/-12/+/-4 at level 1, constant heading, index 0 not pinned",
+					"status": "passing"
 				},
 				{
 					"id": "fe-fringe-threshold",
 					"file": "src/__tests__/decay.test.ts",
-					"case": "chromatic fringe only renders at level > 0.5",
-					"status": "planned"
+					"case": "chromatic fringe absent at level <= 0.5, screen-blended red+cyan passes above; source-over restored after",
+					"status": "passing"
 				},
 				{
-					"id": "rs-set-intensity",
-					"file": "src-tauri/src/commands.rs",
-					"case": "set_intensity updates DecayState + session row; full_decay_ms changes",
-					"status": "planned"
+					"id": "fe-wordbox-cache",
+					"file": "src/__tests__/wordBoxes.test.ts",
+					"case": "WordBoxCache measures once, reuses until invalidate(), re-measures after",
+					"status": "passing"
+				},
+				{
+					"id": "rs-set-intensity-timer",
+					"file": "src-tauri/src/idle_timer.rs",
+					"case": "set_intensity retunes the full-decay window; snapshot reflects new intensity",
+					"status": "passing"
+				},
+				{
+					"id": "rs-set-intensity-store",
+					"file": "src-tauri/src/session_store.rs",
+					"case": "set_intensity updates the persisted session row intensity",
+					"status": "passing"
 				}
 			],
 			"manual": [
