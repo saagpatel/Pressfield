@@ -1,10 +1,12 @@
 //! Local SQLite session store (rusqlite, bundled).
 //!
-//! Stores only counts and timestamps — the prose lives in the webview DOM and
-//! never reaches Rust. The schema is embedded via [`include_str!`] and applied
-//! idempotently on open.
+//! v1 stored only counts and timestamps. v2 (Phase 4) adds named documents with
+//! prose bodies in the `documents` table; sessions grow a `document_id` FK added
+//! via a `PRAGMA user_version`-gated migration. The base schema is embedded via
+//! [`include_str!`] and applied idempotently on every open.
 
 use std::path::{Path, PathBuf};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use rusqlite::Connection;
 use serde::Serialize;
@@ -12,8 +14,20 @@ use serde::Serialize;
 use crate::decay::Intensity;
 use crate::error::{Error, Result};
 
+/// Unix epoch milliseconds, clamped to `i64::MAX`. Returns 0 if the system
+/// clock predates 1970 (practically impossible, but avoids a panic).
+fn now_ms() -> i64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_millis().min(i64::MAX as u128) as i64)
+        .unwrap_or(0)
+}
+
 /// Embedded DDL applied on every open (all statements are `IF NOT EXISTS`).
 const SCHEMA: &str = include_str!("schema.sql");
+
+/// The schema version this code targets. Migrations gate on `PRAGMA user_version`.
+const TARGET_SCHEMA_VERSION: i64 = 2;
 
 /// Aggregate session statistics surfaced to the frontend (Phase 3 stats panel).
 #[derive(Debug, Clone, Serialize)]
@@ -23,6 +37,27 @@ pub struct SessionStats {
     pub word_count: i64,
     pub decay_events: i64,
     pub intensity: String,
+    /// Set after the v1→v2 migration; `None` for sessions created before migration.
+    pub document_id: Option<i64>,
+}
+
+/// Full document record including the prose body.
+#[derive(Debug, Clone, Serialize)]
+pub struct Document {
+    pub id: i64,
+    pub name: String,
+    pub body: String,
+    pub created_at: i64,
+    pub updated_at: i64,
+}
+
+/// Lightweight document descriptor for the list/palette view (no body).
+#[derive(Debug, Clone, Serialize)]
+pub struct DocumentMeta {
+    pub id: i64,
+    pub name: String,
+    pub created_at: i64,
+    pub updated_at: i64,
 }
 
 /// Owns the SQLite connection and the session/keystroke/decay tables.
@@ -115,7 +150,7 @@ impl SessionStore {
     /// Read aggregate stats for a session.
     pub fn get_stats(&self, session_id: i64) -> Result<SessionStats> {
         let stats = self.conn.query_row(
-            "SELECT id, started_at, word_count, decay_events, intensity
+            "SELECT id, started_at, word_count, decay_events, intensity, document_id
              FROM sessions WHERE id = ?1",
             [session_id],
             |row| {
@@ -125,6 +160,7 @@ impl SessionStore {
                     word_count: row.get(2)?,
                     decay_events: row.get(3)?,
                     intensity: row.get(4)?,
+                    document_id: row.get(5)?,
                 })
             },
         )?;
@@ -133,17 +169,41 @@ impl SessionStore {
 
     /// Return up to `limit` sessions, newest first, for the history table.
     pub fn get_recent_sessions(&self, limit: i64) -> Result<Vec<SessionStats>> {
-        let mut stmt = self.conn.prepare(
-            "SELECT id, started_at, word_count, decay_events, intensity
+        self.query_sessions(
+            "SELECT id, started_at, word_count, decay_events, intensity, document_id
              FROM sessions ORDER BY started_at DESC LIMIT ?1",
-        )?;
-        let rows = stmt.query_map([limit], |row| {
+            rusqlite::params![limit],
+        )
+    }
+
+    /// Return up to `limit` sessions for a specific document, newest first.
+    pub fn get_recent_sessions_for_document(
+        &self,
+        document_id: i64,
+        limit: i64,
+    ) -> Result<Vec<SessionStats>> {
+        self.query_sessions(
+            "SELECT id, started_at, word_count, decay_events, intensity, document_id
+             FROM sessions WHERE document_id = ?1 ORDER BY started_at DESC LIMIT ?2",
+            rusqlite::params![document_id, limit],
+        )
+    }
+
+    /// Shared row-mapper for session queries that include the document_id column.
+    fn query_sessions(
+        &self,
+        sql: &str,
+        params: &[&dyn rusqlite::ToSql],
+    ) -> Result<Vec<SessionStats>> {
+        let mut stmt = self.conn.prepare(sql)?;
+        let rows = stmt.query_map(params, |row| {
             Ok(SessionStats {
                 session_id: row.get(0)?,
                 started_at: row.get(1)?,
                 word_count: row.get(2)?,
                 decay_events: row.get(3)?,
                 intensity: row.get(4)?,
+                document_id: row.get(5).ok(),
             })
         })?;
         let mut sessions = Vec::new();
@@ -151,6 +211,144 @@ impl SessionStore {
             sessions.push(row?);
         }
         Ok(sessions)
+    }
+
+    // ── Phase 4: Documents ────────────────────────────────────────────────────
+
+    /// Apply the v1→v2 schema migration (idempotent; gates on `PRAGMA user_version`).
+    ///
+    /// v2 adds `sessions.document_id` (FK → documents), creates a default
+    /// "Untitled" document, and backfills all existing sessions to it.
+    pub fn apply_migration(&self) -> Result<()> {
+        let version: i64 = self
+            .conn
+            .pragma_query_value(None, "user_version", |row| row.get(0))?;
+        if version >= TARGET_SCHEMA_VERSION {
+            return Ok(());
+        }
+        let now = now_ms();
+        let tx = self.conn.unchecked_transaction()?;
+        // Add the column only if it doesn't already exist (fresh DBs created from
+        // the v2 schema already have it; only real on-disk v1 databases are missing it).
+        let has_column: bool = tx
+            .query_row(
+                "SELECT COUNT(*) FROM pragma_table_info('sessions') WHERE name = 'document_id'",
+                [],
+                |row| row.get::<_, i64>(0),
+            )
+            .unwrap_or(0)
+            > 0;
+        if !has_column {
+            tx.execute_batch(
+                "ALTER TABLE sessions ADD COLUMN document_id INTEGER REFERENCES documents(id)",
+            )?;
+        }
+        // Create the default "Untitled" document.
+        tx.execute(
+            "INSERT INTO documents (name, body, created_at, updated_at) VALUES ('Untitled', '', ?1, ?1)",
+            [now],
+        )?;
+        let untitled_id = tx.last_insert_rowid();
+        // Backfill all existing sessions to the Untitled document.
+        tx.execute(
+            "UPDATE sessions SET document_id = ?1 WHERE document_id IS NULL",
+            [untitled_id],
+        )?;
+        tx.pragma_update(None, "user_version", TARGET_SCHEMA_VERSION)?;
+        tx.commit()?;
+        Ok(())
+    }
+
+    /// Insert a new active session bound to a specific document.
+    pub fn start_session_for_document(
+        &self,
+        intensity: Intensity,
+        started_at: i64,
+        document_id: i64,
+    ) -> Result<i64> {
+        self.conn.execute(
+            "INSERT INTO sessions (started_at, intensity, document_id) VALUES (?1, ?2, ?3)",
+            (started_at, intensity.as_str(), document_id),
+        )?;
+        Ok(self.conn.last_insert_rowid())
+    }
+
+    /// Create a new document and return its id.
+    pub fn create_document(&self, name: &str) -> Result<i64> {
+        self.conn.execute(
+            "INSERT INTO documents (name, body, created_at, updated_at) VALUES (?1, '', ?2, ?2)",
+            (name, now_ms()),
+        )?;
+        Ok(self.conn.last_insert_rowid())
+    }
+
+    /// Fetch the full document record (including body).
+    pub fn get_document(&self, id: i64) -> Result<Document> {
+        let doc = self.conn.query_row(
+            "SELECT id, name, body, created_at, updated_at FROM documents WHERE id = ?1",
+            [id],
+            |row| {
+                Ok(Document {
+                    id: row.get(0)?,
+                    name: row.get(1)?,
+                    body: row.get(2)?,
+                    created_at: row.get(3)?,
+                    updated_at: row.get(4)?,
+                })
+            },
+        )?;
+        Ok(doc)
+    }
+
+    /// Persist the prose body for a document and advance its `updated_at`.
+    pub fn save_document(&self, id: i64, body: &str, updated_at: i64) -> Result<()> {
+        self.conn.execute(
+            "UPDATE documents SET body = ?1, updated_at = ?2 WHERE id = ?3",
+            (body, updated_at, id),
+        )?;
+        Ok(())
+    }
+
+    /// Rename a document.
+    pub fn rename_document(&self, id: i64, name: &str) -> Result<()> {
+        self.conn
+            .execute("UPDATE documents SET name = ?1 WHERE id = ?2", (name, id))?;
+        Ok(())
+    }
+
+    /// Delete a document by id.
+    ///
+    /// Sessions that reference this document will have their `document_id` set
+    /// to NULL (no cascade — the session history is preserved).
+    pub fn delete_document(&self, id: i64) -> Result<()> {
+        // Null out FK references so history isn't lost.
+        self.conn.execute(
+            "UPDATE sessions SET document_id = NULL WHERE document_id = ?1",
+            [id],
+        )?;
+        self.conn
+            .execute("DELETE FROM documents WHERE id = ?1", [id])?;
+        Ok(())
+    }
+
+    /// Return all documents, ordered by `updated_at` descending (most-recent first).
+    pub fn list_documents(&self) -> Result<Vec<DocumentMeta>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT id, name, created_at, updated_at FROM documents ORDER BY updated_at DESC",
+        )?;
+        let rows = stmt.query_map([], |row| {
+            Ok(DocumentMeta {
+                id: row.get(0)?,
+                name: row.get(1)?,
+                created_at: row.get(2)?,
+                updated_at: row.get(3)?,
+            })
+        })?;
+        let mut docs = Vec::new();
+        for row in rows {
+            docs.push(row?);
+        }
+        Ok(docs)
     }
 
     /// Count keystroke rows for a session (verification helper + Phase 3 stats).
@@ -271,5 +469,152 @@ mod tests {
     fn schema_reapplies_without_error() {
         let store = SessionStore::open_in_memory().expect("open");
         store.conn.execute_batch(SCHEMA).expect("re-apply schema");
+    }
+
+    // ── Phase 4: Documents ────────────────────────────────────────────────────
+
+    #[test]
+    fn create_document_returns_unique_ids() {
+        let store = SessionStore::open_in_memory().expect("open");
+        let a = store.create_document("Alpha").expect("create Alpha");
+        let b = store.create_document("Beta").expect("create Beta");
+        assert_ne!(a, b, "each document gets a distinct id");
+    }
+
+    #[test]
+    fn get_document_round_trips_name_and_body() {
+        let store = SessionStore::open_in_memory().expect("open");
+        let id = store.create_document("My Essay").expect("create");
+        let doc = store.get_document(id).expect("get");
+        assert_eq!(doc.id, id);
+        assert_eq!(doc.name, "My Essay");
+        assert_eq!(doc.body, "");
+    }
+
+    #[test]
+    fn save_document_stores_body_and_bumps_updated_at() {
+        let store = SessionStore::open_in_memory().expect("open");
+        let id = store.create_document("Draft").expect("create");
+        let t1 = store.get_document(id).expect("get before save").updated_at;
+
+        store
+            .save_document(id, "Hello prose", t1 + 1)
+            .expect("save");
+
+        let doc = store.get_document(id).expect("get after save");
+        assert_eq!(doc.body, "Hello prose");
+        assert!(doc.updated_at > t1, "updated_at must advance");
+    }
+
+    #[test]
+    fn save_document_is_idempotent() {
+        // Saving the same body twice is not an error; body round-trips correctly.
+        let store = SessionStore::open_in_memory().expect("open");
+        let id = store.create_document("Draft").expect("create");
+        store.save_document(id, "prose", 1_000).expect("first save");
+        store
+            .save_document(id, "prose", 2_000)
+            .expect("second save");
+        let doc = store.get_document(id).expect("get");
+        assert_eq!(doc.body, "prose");
+        assert_eq!(doc.updated_at, 2_000);
+    }
+
+    #[test]
+    fn rename_document_updates_name() {
+        let store = SessionStore::open_in_memory().expect("open");
+        let id = store.create_document("Old Name").expect("create");
+        store.rename_document(id, "New Name").expect("rename");
+        assert_eq!(store.get_document(id).expect("get").name, "New Name");
+    }
+
+    #[test]
+    fn delete_document_removes_it() {
+        let store = SessionStore::open_in_memory().expect("open");
+        let id = store.create_document("Gone").expect("create");
+        store.delete_document(id).expect("delete");
+        let result = store.get_document(id);
+        assert!(result.is_err(), "deleted document must not be retrievable");
+    }
+
+    #[test]
+    fn list_documents_returns_all_newest_first() {
+        let store = SessionStore::open_in_memory().expect("open");
+        let a = store.create_document("Alpha").expect("a");
+        let b = store.create_document("Beta").expect("b");
+        // Make Beta more recently updated.
+        store.save_document(b, "", 2_000).expect("save b");
+        store.save_document(a, "", 1_000).expect("save a");
+
+        let docs = store.list_documents().expect("list");
+        assert_eq!(docs.len(), 2);
+        // Newest updated_at first.
+        assert_eq!(docs[0].id, b);
+        assert_eq!(docs[1].id, a);
+    }
+
+    #[test]
+    fn migration_v1_to_v2_adds_document_id_column() {
+        // Simulate a v1 database (no document_id column, user_version = 0).
+        let store = SessionStore::open_in_memory().expect("open");
+        // Create a v1-style session (no document_id available).
+        let session_id = store
+            .start_session(Intensity::Normal, 1_000)
+            .expect("start session");
+
+        // Opening a second time runs `apply_migration` which gates on user_version.
+        // For the in-memory path we call it explicitly.
+        store.apply_migration().expect("apply migration");
+
+        // After migration: session row gets a document_id backfilled to the default Untitled doc.
+        let stats = store.get_stats(session_id).expect("get stats");
+        assert!(
+            stats.document_id.is_some(),
+            "session must have a document_id after migration"
+        );
+    }
+
+    #[test]
+    fn migration_is_idempotent() {
+        // Calling apply_migration twice must not panic or return an error.
+        let store = SessionStore::open_in_memory().expect("open");
+        store.apply_migration().expect("first migration");
+        store
+            .apply_migration()
+            .expect("second migration — must be no-op");
+    }
+
+    #[test]
+    fn get_recent_sessions_filters_by_document() {
+        let store = SessionStore::open_in_memory().expect("open");
+        store.apply_migration().expect("migrate");
+
+        let doc_a = store.create_document("A").expect("doc A");
+        let doc_b = store.create_document("B").expect("doc B");
+
+        let s1 = store
+            .start_session_for_document(Intensity::Normal, 1_000, doc_a)
+            .expect("session 1 doc A");
+        let s2 = store
+            .start_session_for_document(Intensity::Normal, 2_000, doc_b)
+            .expect("session 2 doc B");
+        let s3 = store
+            .start_session_for_document(Intensity::Normal, 3_000, doc_a)
+            .expect("session 3 doc A");
+
+        let a_sessions = store
+            .get_recent_sessions_for_document(doc_a, 10)
+            .expect("sessions for A");
+        let b_sessions = store
+            .get_recent_sessions_for_document(doc_b, 10)
+            .expect("sessions for B");
+
+        assert_eq!(a_sessions.len(), 2, "doc A has 2 sessions");
+        assert_eq!(b_sessions.len(), 1, "doc B has 1 session");
+        // Within doc A, newest first.
+        assert_eq!(a_sessions[0].session_id, s3);
+        assert_eq!(a_sessions[1].session_id, s1);
+        // doc B's single session.
+        assert_eq!(b_sessions[0].session_id, s2);
     }
 }

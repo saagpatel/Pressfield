@@ -1,6 +1,6 @@
 {
 	"project": "Pressfield",
-	"current_phase": 3,
+	"current_phase": 4,
 	"updated_at": "2026-06-06",
 	"phases": [
 		{
@@ -132,6 +132,33 @@
 				{
 					"id": "3.5",
 					"name": "get_recent_sessions command + history table",
+					"status": "done"
+				}
+			]
+		},
+		{
+			"phase": 4,
+			"name": "Persistence Foundation (Rust / data layer)",
+			"status": "done",
+			"tasks": [
+				{
+					"id": "4.1",
+					"name": "documents table in schema.sql + update header comment",
+					"status": "done"
+				},
+				{
+					"id": "4.2",
+					"name": "PRAGMA user_version-gated migration (v1→v2): column, Untitled doc, backfill",
+					"status": "done"
+				},
+				{
+					"id": "4.3",
+					"name": "Document CRUD: create, get, save, rename, delete, list",
+					"status": "done"
+				},
+				{
+					"id": "4.4",
+					"name": "Per-document stats: start_session_for_document + get_recent_sessions_for_document",
 					"status": "done"
 				}
 			]

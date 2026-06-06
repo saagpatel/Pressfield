@@ -286,6 +286,80 @@
 					"case": "cargo tauri build produces a .dmg/.app bundle"
 				}
 			]
+		},
+		"4": {
+			"implemented": [
+				{
+					"id": "rs-doc-create-unique-ids",
+					"file": "src-tauri/src/session_store.rs",
+					"case": "create_document returns distinct ids for distinct documents",
+					"status": "passing"
+				},
+				{
+					"id": "rs-doc-get-roundtrip",
+					"file": "src-tauri/src/session_store.rs",
+					"case": "get_document round-trips name and empty body on fresh create",
+					"status": "passing"
+				},
+				{
+					"id": "rs-doc-save-body",
+					"file": "src-tauri/src/session_store.rs",
+					"case": "save_document stores body and bumps updated_at",
+					"status": "passing"
+				},
+				{
+					"id": "rs-doc-save-idempotent",
+					"file": "src-tauri/src/session_store.rs",
+					"case": "save_document called twice is not an error; body and updated_at are the second call's values",
+					"status": "passing"
+				},
+				{
+					"id": "rs-doc-rename",
+					"file": "src-tauri/src/session_store.rs",
+					"case": "rename_document updates the name field",
+					"status": "passing"
+				},
+				{
+					"id": "rs-doc-delete",
+					"file": "src-tauri/src/session_store.rs",
+					"case": "delete_document makes get_document return an error",
+					"status": "passing"
+				},
+				{
+					"id": "rs-doc-list-newest-first",
+					"file": "src-tauri/src/session_store.rs",
+					"case": "list_documents returns all docs newest-updated_at first",
+					"status": "passing"
+				},
+				{
+					"id": "rs-migration-adds-column",
+					"file": "src-tauri/src/session_store.rs",
+					"case": "apply_migration adds document_id to sessions and backfills to Untitled doc",
+					"status": "passing"
+				},
+				{
+					"id": "rs-migration-idempotent",
+					"file": "src-tauri/src/session_store.rs",
+					"case": "apply_migration called twice does not error",
+					"status": "passing"
+				},
+				{
+					"id": "rs-doc-sessions-filter",
+					"file": "src-tauri/src/session_store.rs",
+					"case": "get_recent_sessions_for_document returns only sessions for that document, newest first",
+					"status": "passing"
+				}
+			],
+			"manual": [
+				{
+					"id": "m4-schema-idempotent",
+					"case": "cargo tauri dev opens without error on a fresh DB (documents table present)"
+				},
+				{
+					"id": "m4-v1-migration",
+					"case": "opening an existing v1 pressfield.db migrates once; Untitled doc exists; sessions backfilled"
+				}
+			]
 		}
 	}
 }
