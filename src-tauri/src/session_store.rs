@@ -353,6 +353,19 @@ impl SessionStore {
         Ok(docs)
     }
 
+    /// Resolve the document to open on launch: the most-recently-updated one,
+    /// seeding a default "Untitled" if the store is empty (fresh install).
+    ///
+    /// Call after [`Self::apply_migration`], which guarantees a v2 schema and —
+    /// for migrated databases — an already-seeded "Untitled". On a never-migrated
+    /// fresh DB this is the seam that creates the first document.
+    pub fn resolve_active_document(&self) -> Result<i64> {
+        match self.list_documents()?.first() {
+            Some(doc) => Ok(doc.id),
+            None => self.create_document("Untitled"),
+        }
+    }
+
     /// Count keystroke rows for a session (verification helper + Phase 3 stats).
     pub fn keystroke_count(&self, session_id: i64) -> Result<i64> {
         let count = self.conn.query_row(
@@ -556,24 +569,52 @@ mod tests {
     }
 
     #[test]
-    fn migration_v1_to_v2_adds_document_id_column() {
-        // Simulate a v1 database (no document_id column, user_version = 0).
+    fn migration_backfills_null_document_id_sessions() {
+        // The in-memory schema already carries `document_id` (it's the v2 DDL), so
+        // this exercises the BACKFILL branch: a session inserted with a NULL
+        // document_id (pre-migration) is repointed to the seeded Untitled doc.
+        // The ALTER-TABLE branch is covered by the real-v1 test below.
         let store = SessionStore::open_in_memory().expect("open");
-        // Create a v1-style session (no document_id available).
         let session_id = store
             .start_session(Intensity::Normal, 1_000)
             .expect("start session");
 
-        // Opening a second time runs `apply_migration` which gates on user_version.
-        // For the in-memory path we call it explicitly.
         store.apply_migration().expect("apply migration");
 
-        // After migration: session row gets a document_id backfilled to the default Untitled doc.
         let stats = store.get_stats(session_id).expect("get stats");
         assert!(
             stats.document_id.is_some(),
             "session must have a document_id after migration"
         );
+    }
+
+    #[test]
+    fn migration_adds_column_on_real_v1_database() {
+        // Genuinely simulate a v1 on-disk DB: strip the v2 column + seeding and
+        // reset the schema version, so apply_migration runs the ALTER-TABLE path
+        // (not just the backfill). This is the branch real upgrades depend on.
+        let store = SessionStore::open_in_memory().expect("open");
+        store
+            .conn
+            .execute_batch(
+                "ALTER TABLE sessions DROP COLUMN document_id;
+                 DELETE FROM documents;
+                 PRAGMA user_version = 0;",
+            )
+            .expect("downgrade to v1 shape");
+        let session_id = store
+            .start_session(Intensity::Normal, 1_000)
+            .expect("v1 session");
+
+        store.apply_migration().expect("migrate");
+
+        // The column was re-added via ALTER and the v1 session backfilled.
+        let stats = store.get_stats(session_id).expect("stats");
+        assert!(stats.document_id.is_some(), "v1 session backfilled");
+        // Exactly one Untitled seeded — not zero, not two.
+        let docs = store.list_documents().expect("list");
+        assert_eq!(docs.len(), 1);
+        assert_eq!(docs[0].name, "Untitled");
     }
 
     #[test]
@@ -618,5 +659,34 @@ mod tests {
         assert_eq!(a_sessions[1].session_id, s1);
         // doc B's single session.
         assert_eq!(b_sessions[0].session_id, s2);
+    }
+
+    #[test]
+    fn resolve_active_document_creates_untitled_when_empty() {
+        // A store with no documents (fresh install) resolves by seeding one.
+        let store = SessionStore::open_in_memory().expect("open");
+        assert_eq!(store.list_documents().expect("list").len(), 0);
+
+        let id = store.resolve_active_document().expect("resolve");
+
+        let docs = store.list_documents().expect("list");
+        assert_eq!(docs.len(), 1, "exactly one seeded document");
+        assert_eq!(docs[0].id, id);
+        assert_eq!(store.get_document(id).expect("get").name, "Untitled");
+    }
+
+    #[test]
+    fn resolve_active_document_returns_most_recently_updated() {
+        // With existing documents, launch reopens the most-recently-touched one.
+        let store = SessionStore::open_in_memory().expect("open");
+        let a = store.create_document("A").expect("a");
+        let b = store.create_document("B").expect("b");
+        store.save_document(a, "", 1_000).expect("save a");
+        store.save_document(b, "", 2_000).expect("save b"); // b is newer
+
+        assert_eq!(store.resolve_active_document().expect("resolve"), b);
+
+        // Resolving must not create a spurious extra document.
+        assert_eq!(store.list_documents().expect("list").len(), 2);
     }
 }

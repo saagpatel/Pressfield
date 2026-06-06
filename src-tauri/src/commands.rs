@@ -16,6 +16,11 @@ use crate::session_store::{Document, DocumentMeta, SessionStats, SessionStore};
 /// The session opened when the app launched, held in Tauri managed state.
 pub struct ActiveSession(pub i64);
 
+/// The document open in the editor this launch, held in Tauri managed state.
+/// The webview reads it via `get_active_document` to hydrate on startup and as
+/// the target for autosave writes.
+pub struct ActiveDocument(pub i64);
+
 /// A pause longer than this (ms) is logged as a recovered decay event when the
 /// next keystroke arrives — matches the schema's "pauses > 5s" definition.
 const DECAY_EVENT_THRESHOLD_MS: u64 = 5_000;
@@ -162,6 +167,17 @@ pub fn delete_document(id: i64, store: State<'_, Mutex<SessionStore>>) -> Result
 pub fn list_documents(store: State<'_, Mutex<SessionStore>>) -> Result<Vec<DocumentMeta>> {
     let store = store.lock().map_err(|_| Error::LockPoisoned)?;
     store.list_documents()
+}
+
+/// Return the document the app opened this launch (id, name, body), so the
+/// webview can hydrate the editor on startup before any keystroke.
+#[tauri::command]
+pub fn get_active_document(
+    active: State<'_, ActiveDocument>,
+    store: State<'_, Mutex<SessionStore>>,
+) -> Result<Document> {
+    let store = store.lock().map_err(|_| Error::LockPoisoned)?;
+    store.get_document(active.0)
 }
 
 #[cfg(test)]

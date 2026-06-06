@@ -5,6 +5,8 @@ import { DecayCanvas } from "./components/DecayCanvas";
 import { Editor } from "./components/Editor";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { StatsPanel } from "./components/StatsPanel";
+import { useActiveDocument } from "./hooks/useActiveDocument";
+import { useAutosave } from "./hooks/useAutosave";
 import { useDecayEvents } from "./hooks/useDecayEvents";
 import { useSessionStats } from "./hooks/useSessionStats";
 import { useTheme } from "./hooks/useTheme";
@@ -38,6 +40,36 @@ function App() {
 	const wordsRef = useRef(0);
 	wordsRef.current = words;
 
+	// The document this launch opened; null until the backend fetch resolves.
+	const activeDoc = useActiveDocument();
+	// Gate autosave on hydration: pass a null target until the editor has been
+	// hydrated, so a keystroke that races ahead of the launch fetch can never
+	// overwrite the persisted body before we've loaded it.
+	const [hydrated, setHydrated] = useState(false);
+	const documentId = hydrated ? (activeDoc?.id ?? null) : null;
+	const { flush: flushAutosave, markSaved } = useAutosave(documentId, text);
+
+	// Mirror the latest flush into a ref so the close handler (registered once
+	// against sessionId) always calls the current one without re-registering.
+	const flushRef = useRef(flushAutosave);
+	flushRef.current = flushAutosave;
+
+	// Hydrate the editor from the saved body exactly once, when the active
+	// document resolves — but never clobber anything the user managed to type
+	// before the fetch landed. Seed the autosave baseline to the editor's actual
+	// post-hydration content so it isn't redundantly re-written on launch.
+	useEffect(() => {
+		if (hydrated || activeDoc === null) return;
+		const el = editorRef.current;
+		if (el === null) return;
+		if (el.innerText === "") {
+			el.innerText = activeDoc.body;
+			setText(activeDoc.body);
+		}
+		markSaved(el.innerText);
+		setHydrated(true);
+	}, [hydrated, activeDoc, markSaved]);
+
 	useEffect(() => {
 		let cancelled = false;
 		invoke<number>("get_active_session_id")
@@ -59,14 +91,21 @@ function App() {
 			.onCloseRequested(async (event) => {
 				event.preventDefault();
 				try {
+					// Persist the final prose, then finalize the session.
+					await flushRef.current();
 					await invoke("end_session", {
 						sessionId,
 						wordCount: wordsRef.current,
 					});
 				} catch (err) {
-					console.error("end_session failed", err);
-				} finally {
+					console.error("close finalize failed", err);
+				}
+				// Always attempt teardown, even if finalize failed — preventDefault
+				// suppressed the OS close, so destroy() is the only remaining exit.
+				try {
 					await appWindow.destroy();
+				} catch (err) {
+					console.error("window destroy failed", err);
 				}
 			})
 			.then((fn) => {

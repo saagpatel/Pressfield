@@ -21,6 +21,16 @@ export interface SessionStats {
 	document_id: number | null; // mirrors Rust Option<i64>; null pre-migration
 }
 
+// A named document with its prose body (mirrors Rust `Document`). Named
+// `DocumentRecord` so it doesn't shadow the DOM `Document` global.
+export interface DocumentRecord {
+	id: number;
+	name: string;
+	body: string;
+	created_at: number; // unix ms
+	updated_at: number; // unix ms
+}
+
 const INTENSITIES: readonly Intensity[] = ["gentle", "normal", "brutal"];
 
 function isIntensity(value: unknown): value is Intensity {

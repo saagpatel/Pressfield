@@ -16,7 +16,7 @@ use std::sync::{Arc, Mutex};
 
 use tauri::Manager;
 
-use commands::{now_ms, ActiveSession};
+use commands::{now_ms, ActiveDocument, ActiveSession};
 use decay::Intensity;
 use idle_timer::IdleTimer;
 use session_store::{default_db_path, SessionStore};
@@ -25,9 +25,14 @@ use session_store::{default_db_path, SessionStore};
 pub fn run() -> anyhow::Result<()> {
     tauri::Builder::default()
         .setup(|app| {
-            // Open the session store and start the session this launch belongs to.
+            // Open the store, run the v1→v2 migration (idempotent after the first
+            // v2 launch), then resolve the document this launch opens into and
+            // start its session.
             let store = SessionStore::open(&default_db_path()?)?;
-            let session_id = store.start_session(Intensity::Normal, now_ms())?;
+            store.apply_migration()?;
+            let document_id = store.resolve_active_document()?;
+            let session_id =
+                store.start_session_for_document(Intensity::Normal, now_ms(), document_id)?;
 
             // Spawn the decay clock; it emits `decay-update` at 10 Hz.
             let timer = Arc::new(IdleTimer::new(Intensity::Normal));
@@ -36,6 +41,7 @@ pub fn run() -> anyhow::Result<()> {
             app.manage(timer);
             app.manage(Mutex::new(store));
             app.manage(ActiveSession(session_id));
+            app.manage(ActiveDocument(document_id));
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -50,7 +56,8 @@ pub fn run() -> anyhow::Result<()> {
             commands::save_document,
             commands::rename_document,
             commands::delete_document,
-            commands::list_documents
+            commands::list_documents,
+            commands::get_active_document
         ])
         .run(tauri::generate_context!())
         .map_err(|e| anyhow::anyhow!("tauri runtime error: {e}"))?;
