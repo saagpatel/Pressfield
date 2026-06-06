@@ -53,7 +53,7 @@ Read `ARC2-HANDOFF.md`, then start Arc 2 with a design/brainstorm pass, not code
 | Arc 1 storage | `documents.body` in SQLite | Persistence makes Pressfield usable for real prose and consciously retires the v1 "never prose" invariant |
 | Autosave posture | Persist clean `innerText` | Decay remains a canvas overlay, so saved prose is clean in Arc 1 |
 | Document UX | Cmd+O command palette | Keyboard-first document switching without cluttering the writing surface |
-| Hardcore mode | Arc 2 planning only until contract resolved; opt-in and OFF by default | Permanent text loss is an ethical and UX contract, not a background implementation detail |
+| Hardcore mode | In scope (Arc 2) per `specs/arc2-hardcore.md` — discrete trailing destruction past full decay; opt-in, global, OFF by default | Permanent text loss is an explicit, operator-approved ethical/UX contract |
 | Canvas strategy | Overlay atop `contenteditable`, not replacement | Native editing, selection, IME, and undo remain browser-owned |
 
 ## Phase-Boundary Review
@@ -62,7 +62,7 @@ At the end of every phase or arc, run `/ultrareview` before committing the phase
 
 ## Do NOT
 
-- Do not implement hardcore mode until the Arc 2 design contract is explicit, operator-approved, opt-in, and OFF by default.
+- Do not implement hardcore mode except as specified in `specs/arc2-hardcore.md` — opt-in, global, OFF by default, and only with the per-bite synchronous flush + undo-defeat in place.
 - Do not make outbound network calls; Pressfield is zero-network and local-only.
 - Do not put decay rendering logic inside React components; all Canvas distortion lives in `src/canvas/decay.ts`.
 - Do not use `unwrap()` or `expect()` in non-test Rust code; propagate errors with `?` and `thiserror`.
