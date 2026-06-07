@@ -33,9 +33,17 @@ found via `xcrun notarytool`.
 
 1. Store notarization credentials in Keychain with `xcrun notarytool`.
 2. Re-run `pnpm tauri build`.
-3. Submit the signed DMG for notarization.
-4. Staple the notarization ticket.
-5. Re-run Gatekeeper checks against both the app and DMG.
+3. Run `scripts/notarize-release.sh`.
+
+The script defaults to a Keychain profile named `Pressfield`. Use
+`PRESSFIELD_NOTARY_PROFILE=<name>` to target a different stored profile.
+
+Create the default profile once with one of:
+
+```sh
+xcrun notarytool store-credentials Pressfield --apple-id <apple-id> --team-id <team-id> --password <app-specific-password>
+xcrun notarytool store-credentials Pressfield --key <api-key-path> --key-id <key-id> --issuer <issuer-id>
+```
 
 ## Validation commands
 
@@ -46,4 +54,5 @@ codesign -dv --verbose=4 src-tauri/target/release/bundle/macos/Pressfield.app
 hdiutil verify src-tauri/target/release/bundle/dmg/Pressfield_0.1.0_aarch64.dmg
 spctl -a -vvv -t exec src-tauri/target/release/bundle/macos/Pressfield.app
 spctl -a -vvv -t open src-tauri/target/release/bundle/dmg/Pressfield_0.1.0_aarch64.dmg
+scripts/notarize-release.sh
 ```
