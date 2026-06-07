@@ -105,7 +105,8 @@ owns the `contenteditable`.
    be `Cmd+Z`-recoverable → breaks "permanent." After a bite, normalize the
    editor so the removal is **not a single undoable op** (e.g. reset the field
    content / clear the undo history). The DB flush is the source of truth; the
-   editor must not be able to out-vote it. **Verified by test in P8.**
+   editor must not be able to out-vote it. **Covered by P8 tests and live Tauri
+   validation on 2026-06-07.**
 2. **Empty / whitespace-only doc.** Bite is a no-op (nothing to remove). Guard in
    `removeTrailingWords`.
 3. **Caret / selection at bite time.** Removing the tail must not throw if the
@@ -139,6 +140,29 @@ Split it:
   textIntegrity.test.ts**.
 - **P9 — Polish + verify.** Edge cases (empty doc, selection, IME), optional
   words-destroyed stat, operator visual pass, `/ultrareview`, mission commit.
+
+## Live validation checkpoint — 2026-06-07
+
+Run on branch `feat/v2-hardcore` in a disposable Tauri environment:
+`HOME=/tmp/pressfield-tauri-home.gkT8RI pnpm tauri dev`.
+
+- Confirm flow: first enable opened the danger dialog and did not persist
+  `hardcore=true` until the explicit **Enable** action.
+- Disable flow: turning hardcore off was immediate, persisted
+  `hardcore=false`, and did not open a confirmation dialog.
+- One-time confirm: repeat enable after the first confirmation skipped the
+  dialog and persisted `hardcore=true`.
+- Destructive bite: a seeded 20-word document
+  (`alpha ... tango`) was reduced by the live Rust/WebView bite path to
+  `alpha bravo`, and SQLite contained the same survivor body.
+- Undo check: after turning hardcore off to stop further bites, invoking the app
+  menu item **Edit → Undo** did not restore the destroyed tail; the window and
+  SQLite both remained at `alpha bravo`.
+
+Validation avoided scripted keystroke injection per `CLAUDE.md`; interaction was
+limited to app/menu clicks plus SQLite/window inspection. The operator should
+still do a final human typing pass before mission commit, but the Tauri shell
+evidence now covers the core irreversible-destruction contract.
 
 ## Deferred / optional
 

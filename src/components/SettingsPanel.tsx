@@ -8,6 +8,39 @@ const OPTIONS: { value: Intensity; label: string; hint: string }[] = [
 	{ value: "brutal", label: "Brutal", hint: "2s" },
 ];
 
+export const HARDCORE_CONFIRM_KEY = "pressfield.hardcore.confirmed";
+
+export type ConfirmationStore = Pick<Storage, "getItem" | "setItem">;
+
+function localConfirmationStore(): ConfirmationStore | null {
+	if (typeof window === "undefined") return null;
+	try {
+		return window.localStorage;
+	} catch {
+		return null;
+	}
+}
+
+export function readHardcoreConfirmed(
+	store: ConfirmationStore | null = localConfirmationStore(),
+): boolean {
+	try {
+		return store?.getItem(HARDCORE_CONFIRM_KEY) === "true";
+	} catch {
+		return false;
+	}
+}
+
+export function rememberHardcoreConfirmed(
+	store: ConfirmationStore | null = localConfirmationStore(),
+): void {
+	try {
+		store?.setItem(HARDCORE_CONFIRM_KEY, "true");
+	} catch {
+		// Storage failure should not block the explicit enable action.
+	}
+}
+
 interface SettingsPanelProps {
 	// Current intensity, read back from the decay stream (Rust is authoritative).
 	current: Intensity;
@@ -17,6 +50,8 @@ interface SettingsPanelProps {
 	hardcore: boolean;
 	// Apply a hardcore on/off change (App persists it via `set_hardcore`).
 	onHardcoreChange: (enabled: boolean) => void;
+	// Optional test seam; production falls back to window.localStorage.
+	confirmationStore?: ConfirmationStore | null;
 }
 
 // Intensity selector + the hardcore-mode toggle. Intensity writes through to Rust
@@ -28,6 +63,7 @@ export function SettingsPanel({
 	sessionId,
 	hardcore,
 	onHardcoreChange,
+	confirmationStore,
 }: SettingsPanelProps) {
 	const choose = (intensity: Intensity) => {
 		if (sessionId === null) return;
@@ -37,15 +73,25 @@ export function SettingsPanel({
 	};
 
 	// Enabling hardcore is gated: clicking the box opens a confirm dialog and the
-	// flag only flips on confirm. Disabling is immediate (de-escalation is safe).
+	// flag only flips on confirm the first time. Disabling is immediate
+	// (de-escalation is safe).
 	const [confirming, setConfirming] = useState(false);
+	const [hasConfirmedHardcore, setHasConfirmedHardcore] = useState(() =>
+		readHardcoreConfirmed(confirmationStore),
+	);
 
 	const onToggle = (event: React.ChangeEvent<HTMLInputElement>) => {
-		if (event.target.checked) setConfirming(true);
-		else onHardcoreChange(false);
+		if (!event.target.checked) {
+			onHardcoreChange(false);
+			return;
+		}
+		if (hasConfirmedHardcore) onHardcoreChange(true);
+		else setConfirming(true);
 	};
 
 	const confirmEnable = () => {
+		rememberHardcoreConfirmed(confirmationStore);
+		setHasConfirmedHardcore(true);
 		setConfirming(false);
 		onHardcoreChange(true);
 	};

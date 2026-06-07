@@ -34,8 +34,9 @@ function collapseCaretToEnd(el: HTMLElement): void {
 //      debounce, or a crash between bite and debounce would resurrect the words,
 //   3. syncs React/autosave state to the survivor.
 //
-// The in-place `innerText` replacement is the undo-defeat (spec sharp-edge #1):
-// it must not be `Cmd+Z`-recoverable in WKWebView. VERIFIED LIVE before trust.
+// Replacing the editor's child tree avoids browser edit commands and reduces the
+// chance of native undo treating the bite as a recoverable edit. A 2026-06-07
+// Tauri validation confirmed Edit > Undo did not restore a bitten tail.
 export function useHardcoreBites({
 	editorRef,
 	documentId,
@@ -62,8 +63,9 @@ export function useHardcoreBites({
 			const after = removeTrailingWords(before, BITE_FRACTION);
 			if (after === before) return; // empty doc: nothing left to destroy
 
-			// Destroy in place (undo-defeating) and reanchor the caret.
-			el.innerText = after;
+			// Destroy in place without going through an editable command path, then
+			// reanchor the caret.
+			el.replaceChildren(document.createTextNode(after));
 			collapseCaretToEnd(el);
 			// Sync React state + autosave baseline to the survivor first, so even if
 			// the flush below throws, autosave won't re-write the pre-bite body.
