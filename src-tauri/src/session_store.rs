@@ -6,7 +6,7 @@
 //! [`include_str!`] and applied idempotently on every open.
 
 use std::path::{Path, PathBuf};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use rusqlite::Connection;
 use serde::Serialize;
@@ -28,6 +28,7 @@ const SCHEMA: &str = include_str!("schema.sql");
 
 /// The schema version this code targets. Migrations gate on `PRAGMA user_version`.
 const TARGET_SCHEMA_VERSION: i64 = 3;
+const SQLITE_BUSY_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// Aggregate session statistics surfaced to the frontend (Phase 3 stats panel).
 #[derive(Debug, Clone, Serialize)]
@@ -71,16 +72,20 @@ impl SessionStore {
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent)?;
         }
-        Self::from_connection(Connection::open(path)?)
+        Self::from_connection(Connection::open(path)?, true)
     }
 
     /// In-memory store for tests.
     pub fn open_in_memory() -> Result<Self> {
-        Self::from_connection(Connection::open_in_memory()?)
+        Self::from_connection(Connection::open_in_memory()?, false)
     }
 
-    fn from_connection(conn: Connection) -> Result<Self> {
+    fn from_connection(conn: Connection, enable_wal: bool) -> Result<Self> {
         conn.pragma_update(None, "foreign_keys", true)?;
+        conn.busy_timeout(SQLITE_BUSY_TIMEOUT)?;
+        if enable_wal {
+            conn.pragma_update(None, "journal_mode", "WAL")?;
+        }
         conn.execute_batch(SCHEMA)?;
         Ok(Self { conn })
     }
@@ -530,6 +535,34 @@ mod tests {
     fn schema_reapplies_without_error() {
         let store = SessionStore::open_in_memory().expect("open");
         store.conn.execute_batch(SCHEMA).expect("re-apply schema");
+    }
+
+    #[test]
+    fn file_backed_store_enables_wal_and_busy_timeout() {
+        let path = std::env::temp_dir().join(format!(
+            "pressfield-sqlite-config-{}-{}.db",
+            std::process::id(),
+            now_ms()
+        ));
+
+        let store = SessionStore::open(&path).expect("open file-backed store");
+
+        let journal_mode: String = store
+            .conn
+            .pragma_query_value(None, "journal_mode", |row| row.get(0))
+            .expect("journal_mode");
+        let busy_timeout_ms: i64 = store
+            .conn
+            .pragma_query_value(None, "busy_timeout", |row| row.get(0))
+            .expect("busy_timeout");
+
+        assert_eq!(journal_mode.to_ascii_lowercase(), "wal");
+        assert_eq!(busy_timeout_ms, SQLITE_BUSY_TIMEOUT.as_millis() as i64);
+
+        drop(store);
+        let _ = std::fs::remove_file(&path);
+        let _ = std::fs::remove_file(path.with_extension("db-wal"));
+        let _ = std::fs::remove_file(path.with_extension("db-shm"));
     }
 
     // ── Phase 4: Documents ────────────────────────────────────────────────────
