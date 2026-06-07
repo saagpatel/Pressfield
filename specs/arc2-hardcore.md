@@ -160,9 +160,9 @@ Run on branch `feat/v2-hardcore` in a disposable Tauri environment:
   SQLite both remained at `alpha bravo`.
 
 Validation avoided scripted keystroke injection per `CLAUDE.md`; interaction was
-limited to app/menu clicks plus SQLite/window inspection. The operator should
-still do a final human typing pass before mission commit, but the Tauri shell
-evidence now covers the core irreversible-destruction contract.
+limited to app/menu clicks plus SQLite/window inspection. The operator completed
+the final human typing pass on 2026-06-07 and reported **Pass**, so Arc 2's
+mission-complete signoff is stamped.
 
 ## Deferred / optional
 

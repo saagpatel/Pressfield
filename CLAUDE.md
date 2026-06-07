@@ -28,7 +28,7 @@ This project inherits the global CC setup: skills, agents, hooks, and MCP plugin
 
 ## Current Phase
 
-**v2 Arc 1: Persistence (Autosave + Named Documents) is code-complete and green on `feat/v2-persistence` at `660816a`.**
+**v2 Arc 2: Hardcore Mode is code-complete, live-validated, human-signoff passed, and green on `feat/v2-hardcore`.**
 
 Arc 1 delivered:
 
@@ -36,13 +36,15 @@ Arc 1 delivered:
 - P5: autosave, active-document bootstrap, launch hydration, close-to-reopen prose survival.
 - P6: Cmd+O command palette for switching, creating, renaming, and deleting documents.
 
-Latest reported gates: 32 cargo tests, 57 vitest tests, `tsc` clean, `vite` clean, and release bundle built.
+Arc 2 delivered:
 
-Outstanding: operator visual pass is not yet human-confirmed. Before stamping Arc 1 fully complete, manually verify type -> close -> reopen, document switching, per-document text/history, and both themes.
+- P7: backend hardcore kill switch, persistence, focus-aware idle clock, and bite cadence.
+- P8: frontend destructive bite consequence, synchronous flush, one-time confirm, and contract tests.
+- P9: live Tauri validation plus final human typing pass. Operator reported **Pass** on 2026-06-07.
 
 ## Next Recommended Move
 
-Read `ARC2-HANDOFF.md`, then start Arc 2 with a design/brainstorm pass, not code. Arc 2 is hardcore mode, where text may be permanently lost after decay crosses a threshold. That reverses the core v1/Arc 1 guarantee, so the save/decay contract must be resolved with the operator before implementation.
+Do a final release-readiness sweep if packaging or distribution is next. Otherwise, pick the next product arc from `IMPLEMENTATION-ROADMAP.md` rather than reopening the completed hardcore contract.
 
 ## Key Decisions
 
@@ -77,7 +79,7 @@ Local-first Tauri 2 desktop writing app where prose visibly decays during idle t
 
 ## Current State
 
-v2 Arc 1 persistence is code-complete and green on `feat/v2-persistence` at `660816a`. It added persisted documents, autosave/hydration, and named-document switching. Arc 2, hardcore mode, is next but must begin with design.
+v2 Arc 2 hardcore mode is code-complete, live-validated, human-signoff passed, and green on `feat/v2-hardcore`. It added opt-in global hardcore mode with one-time confirmation, discrete trailing destruction bites, synchronous save flush, and undo-resistance validation.
 
 ## Stack
 
@@ -99,12 +101,12 @@ v2 Arc 1 persistence is code-complete and green on `feat/v2-persistence` at `660
 
 ## Known Risks
 
-- Arc 1 still needs a human operator visual pass before the UI is fully stamped.
-- Arc 2 hardcore mode changes the app's data-loss contract and must not be implemented without explicit opt-in UX and the save/decay contract resolved.
+- Arc 1 persistence still has an older deferred visual-pass note in `ARC2-HANDOFF.md`; do not confuse that with Arc 2 hardcore signoff, which is now passed.
+- Hardcore mode intentionally changes the app's data-loss contract; keep the opt-in UX, OFF-by-default posture, synchronous flush, and undo-resistance checks intact.
 - The app must stay zero-network and local-only.
 
 ## Next Recommended Move
 
-Read `ARC2-HANDOFF.md`; resolve the hardcore-mode save/decay contract with the operator; then update the implementation plan before coding Arc 2.
+Run a release-readiness sweep if packaging/distribution is next, or choose the next product arc from `IMPLEMENTATION-ROADMAP.md`.
 
 <!-- portfolio-context:end -->
