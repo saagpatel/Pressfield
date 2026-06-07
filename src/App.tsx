@@ -9,6 +9,7 @@ import { StatsPanel } from "./components/StatsPanel";
 import { useActiveDocument } from "./hooks/useActiveDocument";
 import { useAutosave } from "./hooks/useAutosave";
 import { useDecayEvents } from "./hooks/useDecayEvents";
+import { useHardcoreBites } from "./hooks/useHardcoreBites";
 import { useSessionStats } from "./hooks/useSessionStats";
 import { useTheme } from "./hooks/useTheme";
 import type { DocumentRecord } from "./types/ipc";
@@ -29,6 +30,8 @@ function App() {
 	// a palette switch. Null until hydrated, which also gates autosave.
 	const [activeDocId, setActiveDocId] = useState<number | null>(null);
 	const [paletteOpen, setPaletteOpen] = useState(false);
+	// Hardcore mode (global, OFF by default) — read back from Rust at launch.
+	const [hardcore, setHardcore] = useState(false);
 	const [text, setText] = useState("");
 	// Debounce the text before counting: Intl.Segmenter over the full document is
 	// O(n), so running it on every keystroke would jank long-form writing. The
@@ -57,6 +60,42 @@ function App() {
 	// against sessionId) always calls the current one without re-registering.
 	const flushRef = useRef(flushAutosave);
 	flushRef.current = flushAutosave;
+
+	// Read the persisted hardcore flag once at launch so the toggle renders in
+	// its real state (Rust restored it into the timer during setup).
+	useEffect(() => {
+		let cancelled = false;
+		invoke<boolean>("get_hardcore")
+			.then((on) => !cancelled && setHardcore(on))
+			.catch((err) => console.error("get_hardcore failed", err));
+		return () => {
+			cancelled = true;
+		};
+	}, []);
+
+	// Persist a hardcore on/off change, then mirror it locally so the toggle and
+	// the bite listener react immediately.
+	const setHardcoreMode = useCallback((enabled: boolean) => {
+		invoke("set_hardcore", { enabled })
+			.then(() => setHardcore(enabled))
+			.catch((err) => console.error("set_hardcore failed", err));
+	}, []);
+
+	// A bite destroyed the tail: sync React state + the autosave baseline to the
+	// survivor so the debounced autosave can't re-write the pre-bite body over it.
+	const onBiteDestroyed = useCallback(
+		(body: string) => {
+			markSaved(body);
+			setText(body);
+		},
+		[markSaved],
+	);
+
+	useHardcoreBites({
+		editorRef,
+		documentId: activeDocId,
+		onDestroyed: onBiteDestroyed,
+	});
 
 	// Hydrate the editor from the launch document's body exactly once — but never
 	// clobber anything the user typed before the fetch landed. Seeding the
@@ -187,7 +226,12 @@ function App() {
 		<main className="app">
 			<header className="app__bar">
 				<span className="app__title">Pressfield</span>
-				<SettingsPanel current={intensity} sessionId={sessionId} />
+				<SettingsPanel
+					current={intensity}
+					sessionId={sessionId}
+					hardcore={hardcore}
+					onHardcoreChange={setHardcoreMode}
+				/>
 				<span className="app__readout">
 					{latest
 						? `level ${latest.level.toFixed(2)} · idle ${latest.ms_idle}ms · ${latest.intensity}`

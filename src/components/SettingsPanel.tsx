@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { useEffect, useState } from "react";
 import type { Intensity } from "../types/ipc";
 
 const OPTIONS: { value: Intensity; label: string; hint: string }[] = [
@@ -12,19 +13,52 @@ interface SettingsPanelProps {
 	current: Intensity;
 	// The live session id; intensity is persisted on it (changes on doc switch).
 	sessionId: number | null;
+	// Whether hardcore mode is on (global, read back from Rust at launch).
+	hardcore: boolean;
+	// Apply a hardcore on/off change (App persists it via `set_hardcore`).
+	onHardcoreChange: (enabled: boolean) => void;
 }
 
-// Intensity selector. Writes through to Rust `set_intensity`, which retunes the
-// idle timer and persists the choice on the current session row. The checked
-// state reflects the backend value carried on the next decay-update event, so
-// the control always mirrors the real decay rate rather than optimistic state.
-export function SettingsPanel({ current, sessionId }: SettingsPanelProps) {
+// Intensity selector + the hardcore-mode toggle. Intensity writes through to Rust
+// `set_intensity`; hardcore is gated behind a confirm dialog on enable because it
+// makes decay permanently destroy text. The checked states reflect backend
+// values, so the controls mirror real state rather than optimistic UI.
+export function SettingsPanel({
+	current,
+	sessionId,
+	hardcore,
+	onHardcoreChange,
+}: SettingsPanelProps) {
 	const choose = (intensity: Intensity) => {
 		if (sessionId === null) return;
 		invoke("set_intensity", { sessionId, intensity }).catch((err) =>
 			console.error("set_intensity failed", err),
 		);
 	};
+
+	// Enabling hardcore is gated: clicking the box opens a confirm dialog and the
+	// flag only flips on confirm. Disabling is immediate (de-escalation is safe).
+	const [confirming, setConfirming] = useState(false);
+
+	const onToggle = (event: React.ChangeEvent<HTMLInputElement>) => {
+		if (event.target.checked) setConfirming(true);
+		else onHardcoreChange(false);
+	};
+
+	const confirmEnable = () => {
+		setConfirming(false);
+		onHardcoreChange(true);
+	};
+
+	// Escape cancels the confirm dialog without enabling.
+	useEffect(() => {
+		if (!confirming) return;
+		const onKey = (e: KeyboardEvent) => {
+			if (e.key === "Escape") setConfirming(false);
+		};
+		window.addEventListener("keydown", onKey);
+		return () => window.removeEventListener("keydown", onKey);
+	}, [confirming]);
 
 	return (
 		<div className="settings">
@@ -53,22 +87,60 @@ export function SettingsPanel({ current, sessionId }: SettingsPanelProps) {
 				</div>
 			</fieldset>
 
-			{/* Inert v2 scaffold: hardcore mode (permanent text loss past full
-			    decay) is deliberately deferred — the toggle is disabled and wired
-			    to nothing, so prose is never destroyed in v1. */}
 			<label
 				className="settings__hardcore"
-				title="Permanent text loss past full decay — coming in v2"
+				title="Permanent text loss past full decay"
 			>
 				<input
 					type="checkbox"
 					className="settings__hardcore-box"
-					disabled
-					aria-label="Hardcore mode (coming in v2)"
+					checked={hardcore}
+					onChange={onToggle}
+					aria-label="Hardcore mode — permanent text loss past full decay"
 				/>
 				<span className="settings__name">Hardcore</span>
-				<span className="settings__hint">v2</span>
+				<span className="settings__hint">{hardcore ? "on" : "off"}</span>
 			</label>
+
+			{confirming && (
+				<div
+					className="confirm-overlay"
+					role="dialog"
+					aria-modal="true"
+					aria-labelledby="confirm-hardcore-title"
+				>
+					<div className="confirm">
+						<h2 id="confirm-hardcore-title" className="confirm__title">
+							Enable hardcore mode?
+						</h2>
+						<p className="confirm__body">
+							Past full decay, Pressfield will{" "}
+							<strong>permanently destroy</strong> the trailing words of your
+							document — one bite at a time, until you type. Destroyed text
+							cannot be recovered.
+						</p>
+						<div className="confirm__actions">
+							<button
+								type="button"
+								className="confirm__btn"
+								onClick={() => setConfirming(false)}
+							>
+								Cancel
+							</button>
+							{/* biome-ignore lint/a11y/noAutofocus: confirm dialogs should
+							    focus their primary action so Enter/Esc work immediately. */}
+							<button
+								type="button"
+								className="confirm__btn confirm__btn--danger"
+								onClick={confirmEnable}
+								autoFocus
+							>
+								Enable
+							</button>
+						</div>
+					</div>
+				</div>
+			)}
 		</div>
 	);
 }

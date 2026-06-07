@@ -64,3 +64,19 @@ export function isDecayUpdate(value: unknown): value is DecayUpdate {
 		isIntensity(v.intensity)
 	);
 }
+
+// A hardcore destruction tick (mirrors Rust `DecayBite`). Emitted only when
+// hardcore is on, the window is focused, and decay is held at full — each one
+// permanently destroys the trailing fraction of the document. `seq` is a
+// monotonically-increasing index within a decay episode.
+export interface DecayBite {
+	seq: number;
+}
+
+// Narrow an untrusted IPC event payload to a DecayBite before acting on it —
+// the consequence (text destruction) is irreversible, so the guard is the gate.
+export function isDecayBite(value: unknown): value is DecayBite {
+	if (typeof value !== "object" || value === null) return false;
+	const v = value as Record<string, unknown>;
+	return typeof v.seq === "number" && Number.isFinite(v.seq);
+}

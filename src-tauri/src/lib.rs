@@ -90,7 +90,8 @@ pub fn run() -> anyhow::Result<()> {
             commands::get_active_document,
             commands::start_document_session,
             commands::get_recent_document_sessions,
-            commands::set_hardcore
+            commands::set_hardcore,
+            commands::get_hardcore
         ])
         .run(tauri::generate_context!())
         .map_err(|e| anyhow::anyhow!("tauri runtime error: {e}"))?;

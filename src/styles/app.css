@@ -175,18 +175,108 @@ body {
 	opacity: 0.75;
 }
 
-/* Inert v2 scaffold — visibly disabled, never interactive. */
+/* Hardcore-mode toggle (v2 Arc 2) — live, gated behind a confirm on enable. */
 .settings__hardcore {
 	display: inline-flex;
 	align-items: baseline;
 	gap: 5px;
 	color: var(--muted);
-	cursor: not-allowed;
-	opacity: 0.55;
+	cursor: pointer;
+	transition: color 150ms ease;
+}
+
+.settings__hardcore:hover {
+	color: var(--fg);
 }
 
 .settings__hardcore-box {
-	cursor: not-allowed;
+	cursor: pointer;
+	accent-color: var(--accent);
+}
+
+/* Confirm dialog for enabling hardcore mode — mirrors the palette overlay so it
+   reads as the same modal language, on both themes via shared tokens. */
+.confirm-overlay {
+	position: fixed;
+	inset: 0;
+	z-index: 60;
+	display: flex;
+	justify-content: center;
+	align-items: center;
+	background: rgba(0, 0, 0, 0.55);
+	animation: palette-fade 120ms ease;
+}
+
+.confirm {
+	width: min(440px, 90vw);
+	padding: 28px;
+	background: var(--bg);
+	border: 1px solid var(--rule);
+	border-radius: 10px;
+	box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
+	font-family: var(--mono);
+}
+
+.confirm__title {
+	margin: 0 0 14px;
+	font-size: 17px;
+	font-weight: 700;
+	color: var(--fg);
+}
+
+.confirm__body {
+	margin: 0 0 24px;
+	font-size: 13px;
+	line-height: 1.6;
+	color: var(--muted);
+}
+
+.confirm__body strong {
+	color: var(--accent);
+	font-weight: 700;
+}
+
+.confirm__actions {
+	display: flex;
+	justify-content: flex-end;
+	gap: 10px;
+}
+
+.confirm__btn {
+	min-height: 40px;
+	padding: 0 18px;
+	border: 1px solid var(--rule);
+	border-radius: 6px;
+	background: transparent;
+	color: var(--fg);
+	font: inherit;
+	font-size: 13px;
+	cursor: pointer;
+	transition:
+		background 150ms ease,
+		border-color 150ms ease,
+		color 150ms ease;
+}
+
+.confirm__btn:hover {
+	background: var(--rule);
+}
+
+.confirm__btn:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 2px;
+}
+
+.confirm__btn--danger {
+	border-color: var(--accent);
+	background: var(--accent);
+	color: var(--bg);
+	font-weight: 700;
+}
+
+.confirm__btn--danger:hover {
+	filter: brightness(1.1);
+	background: var(--accent);
 }
 
 /* Positioning context shared by the editor and the decay overlay. */

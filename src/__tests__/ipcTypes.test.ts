@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isDecayUpdate } from "../types/ipc";
+import { isDecayBite, isDecayUpdate } from "../types/ipc";
 
 describe("isDecayUpdate", () => {
 	it("accepts a well-formed DecayUpdate payload", () => {
@@ -46,5 +46,32 @@ describe("isDecayUpdate", () => {
 		expect(isDecayUpdate(null)).toBe(false);
 		expect(isDecayUpdate(42)).toBe(false);
 		expect(isDecayUpdate("decay")).toBe(false);
+	});
+});
+
+// isDecayBite gates an irreversible action (text destruction), so it must reject
+// anything that isn't a well-formed DecayBite payload.
+describe("isDecayBite", () => {
+	it("accepts a valid DecayBite payload", () => {
+		expect(isDecayBite({ seq: 0 })).toBe(true);
+		expect(isDecayBite({ seq: 42 })).toBe(true);
+	});
+
+	it("ignores extra properties as long as seq is a finite number", () => {
+		expect(isDecayBite({ seq: 3, extra: "ignored" })).toBe(true);
+	});
+
+	it("rejects a missing or non-numeric seq", () => {
+		expect(isDecayBite({})).toBe(false);
+		expect(isDecayBite({ seq: "1" })).toBe(false);
+		expect(isDecayBite({ seq: NaN })).toBe(false);
+		expect(isDecayBite({ seq: Number.POSITIVE_INFINITY })).toBe(false);
+	});
+
+	it("rejects null and primitive payloads", () => {
+		expect(isDecayBite(null)).toBe(false);
+		expect(isDecayBite(undefined)).toBe(false);
+		expect(isDecayBite(7)).toBe(false);
+		expect(isDecayBite("seq")).toBe(false);
 	});
 });

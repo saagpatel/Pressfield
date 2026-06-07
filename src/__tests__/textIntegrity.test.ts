@@ -1,13 +1,20 @@
 // @vitest-environment happy-dom
 //
-// The v1 hardcore contract: decay is a recoverable VISUAL distortion only — it
-// must never mutate the underlying prose. This guards it by running the full
-// decay pass (word extraction + render) over a live contenteditable and
-// asserting its text is byte-identical afterward. Needs a DOM, so this one file
-// opts into happy-dom; the rest of the suite stays in the node environment.
+// The text-integrity contract, split by mode (v2 Arc 2):
+//   - Hardcore OFF (v1/Arc-1): decay is a recoverable VISUAL distortion only and
+//     must NEVER mutate the underlying prose. Guarded by running the full decay
+//     pass (word extraction + render) over a live contenteditable and asserting
+//     the text is byte-identical afterward.
+//   - Hardcore ON: past full decay, a bite permanently destroys the trailing
+//     words and they do not come back. Guarded by applying the bite transform to
+//     a live contenteditable and asserting the tail is gone, the head survives,
+//     and sustained decay erodes the body to empty.
+// Needs a DOM, so this one file opts into happy-dom; the rest of the suite stays
+// in the node environment.
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { type DecayContext, DecayRenderer, readTokens } from "../canvas/decay";
 import { extractWordBoxes } from "../canvas/wordBoxes";
+import { BITE_FRACTION, removeTrailingWords } from "../utils/destruction";
 
 // A no-op canvas surface — the renderer only needs these members to run.
 function stubCtx(): DecayContext {
@@ -39,7 +46,7 @@ const rect = (left: number, top: number, w: number, h: number): DOMRect =>
 		toJSON: () => ({}),
 	}) as DOMRect;
 
-describe("decay never mutates editor text (v1 hardcore contract)", () => {
+describe("hardcore OFF: decay never mutates editor text (v1/Arc-1 contract)", () => {
 	afterEach(() => vi.restoreAllMocks());
 
 	it("leaves contenteditable text byte-identical after a full decay pass", () => {
@@ -67,5 +74,37 @@ describe("decay never mutates editor text (v1 hardcore contract)", () => {
 
 		expect(editor.innerText).toBe(before);
 		expect(editor.textContent).toBe(prose);
+	});
+});
+
+describe("hardcore ON: decay destroys the tail past full decay (v2 Arc 2)", () => {
+	it("permanently removes the trailing words, head survives", () => {
+		const editor = document.createElement("div");
+		editor.setAttribute("contenteditable", "true");
+		editor.textContent = "alpha beta gamma delta epsilon"; // 5 words
+		document.body.appendChild(editor);
+
+		// One bite at the spec fraction: 10% of 5 → ceil(0.5) = 1 word off the tail.
+		// This is exactly the in-place mutation the bite listener performs.
+		editor.innerText = removeTrailingWords(editor.innerText, BITE_FRACTION);
+
+		expect(editor.innerText).toBe("alpha beta gamma delta");
+		expect(editor.innerText).not.toContain("epsilon"); // tail is gone
+		expect(editor.innerText.startsWith("alpha beta gamma")).toBe(true); // head lives
+	});
+
+	it("erodes the document to empty under sustained decay", () => {
+		const editor = document.createElement("div");
+		editor.setAttribute("contenteditable", "true");
+		editor.textContent = "one two three";
+		document.body.appendChild(editor);
+
+		// Sustained full decay = repeated bites. Each removes ≥1 word, so the body
+		// monotonically erodes to nothing (the honest end state of hardcore).
+		let guard = 0;
+		while (editor.innerText.trim() !== "" && guard++ < 50) {
+			editor.innerText = removeTrailingWords(editor.innerText, BITE_FRACTION);
+		}
+		expect(editor.innerText).toBe("");
 	});
 });

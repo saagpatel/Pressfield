@@ -227,6 +227,14 @@ pub fn set_hardcore(
     Ok(())
 }
 
+/// Read the current hardcore-mode flag from the live timer, so the settings UI
+/// can render the toggle in its persisted state at launch. Infallible — a plain
+/// atomic read of the value restored during setup.
+#[tauri::command]
+pub fn get_hardcore(timer: State<'_, Arc<IdleTimer>>) -> bool {
+    timer.hardcore()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
