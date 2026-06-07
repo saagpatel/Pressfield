@@ -44,7 +44,7 @@ Arc 2 delivered:
 
 ## Next Recommended Move
 
-Do a final release-readiness sweep if packaging or distribution is next. Otherwise, pick the next product arc from `IMPLEMENTATION-ROADMAP.md` rather than reopening the completed hardcore contract.
+For distribution, finish notarization using `RELEASE-READINESS.md`. For product work, pick Arc 3 (custom decay-curve editor) from `IMPLEMENTATION-ROADMAP.md` rather than reopening the completed hardcore contract.
 
 ## Key Decisions
 
@@ -107,6 +107,6 @@ v2 Arc 2 hardcore mode is code-complete, live-validated, human-signoff passed, a
 
 ## Next Recommended Move
 
-Run a release-readiness sweep if packaging/distribution is next, or choose the next product arc from `IMPLEMENTATION-ROADMAP.md`.
+For distribution, finish notarization using `RELEASE-READINESS.md`; otherwise choose Arc 3 (custom decay-curve editor) from `IMPLEMENTATION-ROADMAP.md`.
 
 <!-- portfolio-context:end -->
