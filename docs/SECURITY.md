@@ -25,8 +25,4 @@ Include the affected version or commit, reproduction steps, expected impact, and
 
 ## Verification
 
-Before shipping security-sensitive changes, run the repo's documented frontend and Rust checks from `README.md`, plus the local-first Tauri drift scanner:
-
-```bash
-/Users/d/.codex/codexkit/scripts/audit/check_local_first_tauri_app_drift.py --apps Pressfield --fail-on warning
-```
+Before shipping security-sensitive changes, run the repo's documented frontend and Rust checks from `README.md`, plus any local-first drift checks that confirm the app stays zero-network and offline-only.
