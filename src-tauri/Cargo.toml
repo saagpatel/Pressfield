@@ -1,0 +1,21 @@
+[package]
+name = "pressfield"
+version = "0.1.0"
+description = "A local-first writing app where prose decays during idle time"
+authors = ["Saagar"]
+edition = "2021"
+
+[lib]
+# Distinct lib name avoids the bin/lib name clash on Windows.
+name = "pressfield_lib"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+rusqlite = { version = "0.31", features = ["bundled"] }
+thiserror = "1"
+anyhow = "1"

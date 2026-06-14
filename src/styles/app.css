@@ -1,0 +1,401 @@
+:root {
+	--bg: #0e0e10;
+	--fg: #e8e6e1;
+	--muted: #6b6b72;
+	--rule: #1d1d21;
+	--accent: #d8412f; /* the one bold accent — decay red */
+	--bar-h: 40px;
+	--prose: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+	--mono: "SF Mono", "JetBrains Mono", "Fira Code", ui-monospace, monospace;
+}
+
+/* Light theme: paper-white surface, ink-dark text, same decay-red accent — the
+   bright background makes the chromatic fringe read more sharply than on dark. */
+:root[data-theme="light"] {
+	--bg: #f7f5f0;
+	--fg: #1a1a1d;
+	--muted: #8a877f;
+	--rule: #e2ded5;
+}
+
+* {
+	box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+	height: 100%;
+	margin: 0;
+}
+
+body {
+	background: var(--bg);
+	color: var(--fg);
+}
+
+.app {
+	display: flex;
+	flex-direction: column;
+	height: 100vh;
+}
+
+.app__bar {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	height: var(--bar-h);
+	padding: 0 20px;
+	border-bottom: 1px solid var(--rule);
+	font-family: var(--mono);
+	font-size: 12px;
+}
+
+.app__title {
+	font-weight: 700;
+	letter-spacing: 0.18em;
+	text-transform: uppercase;
+}
+
+.app__readout {
+	color: var(--muted);
+}
+
+.app__theme {
+	padding: 4px 12px;
+	min-height: 28px;
+	border: 1px solid var(--rule);
+	border-radius: 4px;
+	background: transparent;
+	color: var(--muted);
+	font: inherit;
+	letter-spacing: 0.12em;
+	text-transform: uppercase;
+	cursor: pointer;
+	transition:
+		background 160ms ease,
+		color 160ms ease,
+		border-color 160ms ease;
+}
+
+.app__theme:hover {
+	color: var(--fg);
+	background: var(--rule);
+}
+
+.app__theme:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 1px;
+}
+
+/* Intensity selector: a compact segmented control living in the top bar. */
+.settings {
+	display: flex;
+	align-items: center;
+	gap: 16px;
+}
+
+.settings__group {
+	margin: 0;
+	padding: 0;
+	border: 0;
+	display: flex;
+	align-items: center;
+	gap: 10px;
+}
+
+.settings__legend {
+	float: left; /* fieldset legends don't flex; float keeps it inline-left */
+	padding: 0;
+	color: var(--muted);
+	letter-spacing: 0.14em;
+	text-transform: uppercase;
+}
+
+.settings__options {
+	display: flex;
+	gap: 2px;
+	padding: 2px;
+	border: 1px solid var(--rule);
+	border-radius: 6px;
+}
+
+.settings__option {
+	display: inline-flex;
+	align-items: baseline;
+	gap: 5px;
+	padding: 4px 10px;
+	border-radius: 4px;
+	cursor: pointer;
+	color: var(--muted);
+	transition:
+		background 160ms ease,
+		color 160ms ease;
+}
+
+.settings__option:hover {
+	color: var(--fg);
+	background: var(--rule);
+}
+
+.settings__option--active {
+	color: var(--bg);
+	background: var(--accent);
+}
+
+.settings__option--active:hover {
+	color: var(--bg);
+	background: var(--accent);
+}
+
+/* Visually hide the native radio but keep it focusable for keyboard + a11y. */
+.settings__radio {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	margin: -1px;
+	padding: 0;
+	border: 0;
+	clip: rect(0 0 0 0);
+	overflow: hidden;
+}
+
+/* Replace the removed native outline with a visible focus ring on the label. */
+.settings__option:focus-within {
+	outline: 2px solid var(--accent);
+	outline-offset: 1px;
+}
+
+.settings__option--active:focus-within {
+	outline-color: var(--fg);
+}
+
+.settings__hint {
+	font-size: 10px;
+	opacity: 0.75;
+}
+
+/* Hardcore-mode toggle (v2 Arc 2) — live, gated behind a confirm on enable. */
+.settings__hardcore {
+	display: inline-flex;
+	align-items: baseline;
+	gap: 5px;
+	color: var(--muted);
+	cursor: pointer;
+	transition: color 150ms ease;
+}
+
+.settings__hardcore:hover {
+	color: var(--fg);
+}
+
+.settings__hardcore-box {
+	cursor: pointer;
+	accent-color: var(--accent);
+}
+
+/* Confirm dialog for enabling hardcore mode — mirrors the palette overlay so it
+   reads as the same modal language, on both themes via shared tokens. */
+.confirm-overlay {
+	position: fixed;
+	inset: 0;
+	z-index: 60;
+	display: flex;
+	justify-content: center;
+	align-items: center;
+	background: rgba(0, 0, 0, 0.55);
+	animation: palette-fade 120ms ease;
+}
+
+.confirm {
+	width: min(440px, 90vw);
+	padding: 28px;
+	background: var(--bg);
+	border: 1px solid var(--rule);
+	border-radius: 10px;
+	box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
+	font-family: var(--mono);
+}
+
+.confirm__title {
+	margin: 0 0 14px;
+	font-size: 17px;
+	font-weight: 700;
+	color: var(--fg);
+}
+
+.confirm__body {
+	margin: 0 0 24px;
+	font-size: 13px;
+	line-height: 1.6;
+	color: var(--muted);
+}
+
+.confirm__body strong {
+	color: var(--accent);
+	font-weight: 700;
+}
+
+.confirm__actions {
+	display: flex;
+	justify-content: flex-end;
+	gap: 10px;
+}
+
+.confirm__btn {
+	min-height: 40px;
+	padding: 0 18px;
+	border: 1px solid var(--rule);
+	border-radius: 6px;
+	background: transparent;
+	color: var(--fg);
+	font: inherit;
+	font-size: 13px;
+	cursor: pointer;
+	transition:
+		background 150ms ease,
+		border-color 150ms ease,
+		color 150ms ease;
+}
+
+.confirm__btn:hover {
+	background: var(--rule);
+}
+
+.confirm__btn:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 2px;
+}
+
+.confirm__btn--danger {
+	border-color: var(--accent);
+	background: var(--accent);
+	color: var(--bg);
+	font-weight: 700;
+}
+
+.confirm__btn--danger:hover {
+	filter: brightness(1.1);
+	background: var(--accent);
+}
+
+/* Positioning context shared by the editor and the decay overlay. */
+.surface {
+	position: relative;
+	flex: 1;
+	min-height: 0; /* let the flex child shrink so the editor can scroll */
+}
+
+.editor {
+	height: 100%;
+	width: 100%;
+	max-width: 70ch;
+	margin: 0 auto;
+	padding: 64px clamp(24px, 8vw, 120px);
+	overflow-y: auto;
+	outline: none;
+	font-family: var(--prose);
+	font-weight: 300;
+	font-size: 22px;
+	line-height: 1.7;
+	caret-color: var(--accent);
+}
+
+.editor:empty::before {
+	content: attr(data-placeholder);
+	color: var(--muted);
+	font-style: italic;
+	pointer-events: none;
+}
+
+/* The decay overlay: covers the surface, never intercepts input. */
+.decay-canvas {
+	position: absolute;
+	inset: 0;
+	width: 100%;
+	height: 100%;
+	pointer-events: none;
+}
+
+/* Session stats bar: a bottom counterpart to the top app bar. */
+.stats {
+	border-top: 1px solid var(--rule);
+	padding: 10px 20px;
+	font-family: var(--mono);
+	font-size: 12px;
+}
+
+.stats__live {
+	display: flex;
+	align-items: center;
+	gap: 28px;
+}
+
+.stat {
+	display: inline-flex;
+	align-items: baseline;
+	gap: 6px;
+}
+
+.stat__value {
+	font-weight: 700;
+	color: var(--fg);
+}
+
+.stat__label {
+	color: var(--muted);
+	letter-spacing: 0.12em;
+	text-transform: uppercase;
+	font-size: 10px;
+}
+
+.stats__copy {
+	margin-left: auto;
+	padding: 6px 14px;
+	min-height: 28px;
+	border: 1px solid var(--rule);
+	border-radius: 4px;
+	background: transparent;
+	color: var(--fg);
+	font: inherit;
+	cursor: pointer;
+	transition:
+		background 160ms ease,
+		border-color 160ms ease;
+}
+
+.stats__copy:hover {
+	background: var(--rule);
+	border-color: var(--accent);
+}
+
+.stats__copy:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 1px;
+}
+
+.stats__history {
+	width: 100%;
+	margin-top: 12px;
+	border-collapse: collapse;
+	color: var(--muted);
+}
+
+.stats__history th,
+.stats__history td {
+	text-align: left;
+	padding: 4px 12px 4px 0;
+	font-weight: 400;
+}
+
+.stats__history th {
+	color: var(--muted);
+	letter-spacing: 0.1em;
+	text-transform: uppercase;
+	font-size: 10px;
+	border-bottom: 1px solid var(--rule);
+}
+
+.stats__history td {
+	color: var(--fg);
+}

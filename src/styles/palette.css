@@ -1,0 +1,180 @@
+/* Cmd+O document palette. Uses the shared theme tokens (var(--bg) etc.) so it
+   renders correctly on both dark and light without per-theme overrides. */
+
+.palette-overlay {
+	position: fixed;
+	inset: 0;
+	z-index: 50;
+	display: flex;
+	justify-content: center;
+	align-items: flex-start;
+	padding-top: 12vh;
+	background: rgba(0, 0, 0, 0.45);
+	animation: palette-fade 120ms ease;
+}
+
+@keyframes palette-fade {
+	from {
+		opacity: 0;
+	}
+}
+
+.palette {
+	width: min(560px, 92vw);
+	max-height: 64vh;
+	display: flex;
+	flex-direction: column;
+	background: var(--bg);
+	border: 1px solid var(--rule);
+	border-radius: 10px;
+	box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+	overflow: hidden;
+	font-family: var(--mono);
+}
+
+.palette__input {
+	width: 100%;
+	padding: 18px 20px;
+	border: 0;
+	border-bottom: 1px solid var(--rule);
+	background: transparent;
+	color: var(--fg);
+	font: inherit;
+	font-size: 15px;
+	outline: none;
+}
+
+.palette__input::placeholder {
+	color: var(--muted);
+}
+
+.palette__list {
+	margin: 0;
+	padding: 6px;
+	list-style: none;
+	overflow-y: auto;
+}
+
+.palette__item,
+.palette__create {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	padding: 8px 12px;
+	border-radius: 6px;
+}
+
+.palette__item--highlight {
+	background: var(--rule);
+}
+
+.palette__name {
+	flex: 1;
+	display: flex;
+	align-items: baseline;
+	gap: 10px;
+	padding: 0;
+	border: 0;
+	background: transparent;
+	color: var(--fg);
+	font: inherit;
+	font-size: 14px;
+	text-align: left;
+	cursor: pointer;
+}
+
+.palette__name-text {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.palette__name:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 2px;
+	border-radius: 3px;
+}
+
+.palette__badge {
+	flex: none;
+	color: var(--accent);
+	font-size: 9px;
+	letter-spacing: 0.14em;
+	text-transform: uppercase;
+}
+
+.palette__create .palette__name {
+	color: var(--accent);
+}
+
+/* Row actions reveal on hover/highlight but stay keyboard-reachable via
+   focus-within, so they never trap or hide from the keyboard. */
+.palette__actions {
+	display: flex;
+	gap: 4px;
+	opacity: 0;
+	transition: opacity 140ms ease;
+}
+
+.palette__item:hover .palette__actions,
+.palette__item--highlight .palette__actions,
+.palette__item:focus-within .palette__actions {
+	opacity: 1;
+}
+
+.palette__action {
+	padding: 4px 9px;
+	min-height: 26px;
+	border: 1px solid transparent;
+	border-radius: 4px;
+	background: transparent;
+	color: var(--muted);
+	font: inherit;
+	font-size: 11px;
+	cursor: pointer;
+	transition:
+		background 140ms ease,
+		color 140ms ease,
+		border-color 140ms ease;
+}
+
+.palette__action:hover {
+	color: var(--fg);
+	background: var(--rule);
+	border-color: var(--rule);
+}
+
+.palette__action:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 1px;
+}
+
+.palette__action--danger:hover {
+	color: var(--bg);
+	background: var(--accent);
+	border-color: var(--accent);
+}
+
+.palette__rename {
+	flex: 1;
+	padding: 4px 8px;
+	border: 1px solid var(--accent);
+	border-radius: 4px;
+	background: var(--bg);
+	color: var(--fg);
+	font: inherit;
+	font-size: 14px;
+	outline: none;
+}
+
+.palette__footer {
+	display: flex;
+	gap: 18px;
+	padding: 10px 16px;
+	border-top: 1px solid var(--rule);
+	color: var(--muted);
+	font-size: 10px;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+}

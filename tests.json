@@ -1,0 +1,365 @@
+{
+	"project": "Pressfield",
+	"updated_at": "2026-06-06",
+	"runners": {
+		"rust": "cargo test --manifest-path src-tauri/Cargo.toml",
+		"frontend": "pnpm vitest run"
+	},
+	"phases": {
+		"0": {
+			"implemented": [
+				{
+					"id": "rs-decay-zero",
+					"file": "src-tauri/src/decay.rs",
+					"case": "decay_level(0, Normal) == 0.0",
+					"status": "passing"
+				},
+				{
+					"id": "rs-decay-full",
+					"file": "src-tauri/src/decay.rs",
+					"case": "decay_level reaches 1.0 at full_decay_ms per intensity",
+					"status": "passing"
+				},
+				{
+					"id": "rs-decay-clamp",
+					"file": "src-tauri/src/decay.rs",
+					"case": "decay_level clamps to 1.0 past full decay",
+					"status": "passing"
+				},
+				{
+					"id": "rs-decay-mid",
+					"file": "src-tauri/src/decay.rs",
+					"case": "linear ramp hits 0.5 at half of full_decay_ms",
+					"status": "passing"
+				},
+				{
+					"id": "rs-decay-monotonic",
+					"file": "src-tauri/src/decay.rs",
+					"case": "decay_level is monotonically increasing",
+					"status": "passing"
+				},
+				{
+					"id": "rs-decay-serde",
+					"file": "src-tauri/src/decay.rs",
+					"case": "Intensity serializes lowercase; as_str matches",
+					"status": "passing"
+				},
+				{
+					"id": "rs-timer-advance",
+					"file": "src-tauri/src/idle_timer.rs",
+					"case": "advance increments ms_idle by delta",
+					"status": "passing"
+				},
+				{
+					"id": "rs-timer-reset",
+					"file": "src-tauri/src/idle_timer.rs",
+					"case": "reset zeroes counter and level",
+					"status": "passing"
+				},
+				{
+					"id": "rs-timer-level",
+					"file": "src-tauri/src/idle_timer.rs",
+					"case": "advance reports correct decay level",
+					"status": "passing"
+				},
+				{
+					"id": "rs-timer-snapshot",
+					"file": "src-tauri/src/idle_timer.rs",
+					"case": "snapshot does not advance the clock",
+					"status": "passing"
+				},
+				{
+					"id": "rs-store-roundtrip",
+					"file": "src-tauri/src/session_store.rs",
+					"case": "start -> 3 keystrokes -> end -> stats word_count=0 decay_events=0; keystroke_count=3",
+					"status": "passing"
+				},
+				{
+					"id": "rs-store-cascade",
+					"file": "src-tauri/src/session_store.rs",
+					"case": "keystrokes cascade-delete with session (FK on)",
+					"status": "passing"
+				},
+				{
+					"id": "rs-store-idempotent",
+					"file": "src-tauri/src/session_store.rs",
+					"case": "embedded schema re-applies without error",
+					"status": "passing"
+				},
+				{
+					"id": "fe-ipc-guard",
+					"file": "src/__tests__/ipcTypes.test.ts",
+					"case": "isDecayUpdate accepts valid, rejects bad intensity / missing fields / NaN / null / primitives",
+					"status": "passing"
+				}
+			],
+			"manual": [
+				{
+					"id": "m0-window",
+					"case": "cargo tauri dev opens a window with no console errors"
+				},
+				{
+					"id": "m0-events",
+					"case": "decay-update events log at ~10 Hz; ms_idle increments ~100 per event when idle"
+				},
+				{
+					"id": "m0-reset",
+					"case": "pressing a key drops ms_idle < 200 in the next event"
+				},
+				{
+					"id": "m0-db",
+					"case": "~/.pressfield/pressfield.db exists and is a valid SQLite DB after first launch"
+				}
+			]
+		},
+		"1": {
+			"planned": [
+				{
+					"id": "fe-wordcount",
+					"file": "src/__tests__/wordCount.test.ts",
+					"case": "Intl.Segmenter word count: emoji, trailing whitespace, multibyte",
+					"status": "planned"
+				},
+				{
+					"id": "fe-decaymath-linear",
+					"file": "src/__tests__/decayMath.test.ts",
+					"case": "interpolate() between two DecayUpdate levels",
+					"status": "planned"
+				},
+				{
+					"id": "fe-renderer-blank",
+					"file": "src/__tests__/decay.test.ts",
+					"case": "level 0.0 -> transparent (globalAlpha 1.0, no blur)",
+					"status": "planned"
+				},
+				{
+					"id": "fe-renderer-full",
+					"file": "src/__tests__/decay.test.ts",
+					"case": "level 1.0 -> blur >= 4px, opacity <= 0.2, y-offset >= 4px",
+					"status": "planned"
+				}
+			],
+			"manual": [
+				{
+					"id": "m1-cover",
+					"case": "Canvas covers editor with no pixel offset at 100% and 150% zoom"
+				},
+				{
+					"id": "m1-passthrough",
+					"case": "pointer-events:none - clicks/keystrokes reach editor through canvas"
+				},
+				{
+					"id": "m1-decay",
+					"case": "5s idle (normal) -> visible blur + opacity change"
+				},
+				{
+					"id": "m1-recover",
+					"case": "resume typing -> canvas clears within ~16ms"
+				},
+				{
+					"id": "m1-resize",
+					"case": "window resize -> canvas re-covers editor immediately"
+				}
+			]
+		},
+		"2": {
+			"implemented": [
+				{
+					"id": "fe-decaymath-quadratic",
+					"file": "src/__tests__/decayMath.test.ts",
+					"case": "levelFromMs quadratic: 0->0.0, 2500->~0.25, 5000->1.0, strictly increasing; intensity scales window",
+					"status": "passing"
+				},
+				{
+					"id": "fe-drift-deterministic",
+					"file": "src/__tests__/decay.test.ts",
+					"case": "driftVector deterministic per index, zero at rest, bounded +/-12/+/-4 at level 1, constant heading, index 0 not pinned",
+					"status": "passing"
+				},
+				{
+					"id": "fe-fringe-threshold",
+					"file": "src/__tests__/decay.test.ts",
+					"case": "chromatic fringe absent at level <= 0.5, screen-blended red+cyan passes above; source-over restored after",
+					"status": "passing"
+				},
+				{
+					"id": "fe-wordbox-cache",
+					"file": "src/__tests__/wordBoxes.test.ts",
+					"case": "WordBoxCache measures once, reuses until invalidate(), re-measures after",
+					"status": "passing"
+				},
+				{
+					"id": "rs-set-intensity-timer",
+					"file": "src-tauri/src/idle_timer.rs",
+					"case": "set_intensity retunes the full-decay window; snapshot reflects new intensity",
+					"status": "passing"
+				},
+				{
+					"id": "rs-set-intensity-store",
+					"file": "src-tauri/src/session_store.rs",
+					"case": "set_intensity updates the persisted session row intensity",
+					"status": "passing"
+				}
+			],
+			"manual": [
+				{
+					"id": "m2-drift",
+					"case": "word drift visible at level 0.8 (normal, ~4s idle)"
+				},
+				{
+					"id": "m2-fringe",
+					"case": "chromatic fringe visible at level 0.7 on light background"
+				},
+				{
+					"id": "m2-intensity",
+					"case": "brutal -> full decay ~2s; gentle -> ~8s"
+				},
+				{
+					"id": "m2-paste",
+					"case": "paste 500 words -> canvas re-syncs within 1 frame"
+				}
+			]
+		},
+		"3": {
+			"implemented": [
+				{
+					"id": "fe-stats-elapsed",
+					"file": "src/__tests__/statsPanel.test.ts",
+					"case": "formatElapsed: m:ss, sub-minute padding, minute rollover, floor, clamp negative",
+					"status": "passing"
+				},
+				{
+					"id": "fe-theme-helpers",
+					"file": "src/__tests__/useTheme.test.ts",
+					"case": "nextTheme toggles dark<->light; parseTheme narrows stored value, defaults dark",
+					"status": "passing"
+				},
+				{
+					"id": "rs-decay-event",
+					"file": "src-tauri/src/session_store.rs",
+					"case": "record_decay_event inserts the event row AND increments the session counter (atomic)",
+					"status": "passing"
+				},
+				{
+					"id": "rs-recent-sessions",
+					"file": "src-tauri/src/session_store.rs",
+					"case": "get_recent_sessions returns sessions newest-first with correct word counts",
+					"status": "passing"
+				},
+				{
+					"id": "rs-decay-window",
+					"file": "src-tauri/src/commands.rs",
+					"case": "recovered_decay_window: None at/below 5s threshold, Some(started,recovered) above",
+					"status": "passing"
+				},
+				{
+					"id": "fe-hardcore-guard",
+					"file": "src/__tests__/textIntegrity.test.ts",
+					"case": "full decay pass (extractWordBoxes + render) leaves contenteditable innerText + textContent byte-identical (happy-dom env)",
+					"status": "passing"
+				}
+			],
+			"note": "Components/hooks (StatsPanel, Editor, SettingsPanel, useTheme effect) are verified via tsc + manual checks, per the project's node-env / no-RTL convention. The one DOM test (textIntegrity) opts into happy-dom via a per-file docblock for the v1 text-integrity contract. Export is frontend navigator.clipboard, so the original rs-export-text Rust case no longer applies.",
+			"manual": [
+				{
+					"id": "m3-stats",
+					"case": "stats panel shows live word count, decay events, elapsed time"
+				},
+				{
+					"id": "m3-export",
+					"case": "Copy clean text -> paste -> undistorted prose"
+				},
+				{
+					"id": "m3-themes",
+					"case": "dark + light themes; decay visible on both; persists across restart"
+				},
+				{
+					"id": "m3-history",
+					"case": "history table shows last 10 sessions with correct data"
+				},
+				{
+					"id": "m3-hardcore",
+					"case": "hardcore toggle renders disabled + no-op; editor text survives a full decay (clean export proves it)"
+				},
+				{
+					"id": "m3-build",
+					"case": "cargo tauri build produces a .dmg/.app bundle"
+				}
+			]
+		},
+		"4": {
+			"implemented": [
+				{
+					"id": "rs-doc-create-unique-ids",
+					"file": "src-tauri/src/session_store.rs",
+					"case": "create_document returns distinct ids for distinct documents",
+					"status": "passing"
+				},
+				{
+					"id": "rs-doc-get-roundtrip",
+					"file": "src-tauri/src/session_store.rs",
+					"case": "get_document round-trips name and empty body on fresh create",
+					"status": "passing"
+				},
+				{
+					"id": "rs-doc-save-body",
+					"file": "src-tauri/src/session_store.rs",
+					"case": "save_document stores body and bumps updated_at",
+					"status": "passing"
+				},
+				{
+					"id": "rs-doc-save-idempotent",
+					"file": "src-tauri/src/session_store.rs",
+					"case": "save_document called twice is not an error; body and updated_at are the second call's values",
+					"status": "passing"
+				},
+				{
+					"id": "rs-doc-rename",
+					"file": "src-tauri/src/session_store.rs",
+					"case": "rename_document updates the name field",
+					"status": "passing"
+				},
+				{
+					"id": "rs-doc-delete",
+					"file": "src-tauri/src/session_store.rs",
+					"case": "delete_document makes get_document return an error",
+					"status": "passing"
+				},
+				{
+					"id": "rs-doc-list-newest-first",
+					"file": "src-tauri/src/session_store.rs",
+					"case": "list_documents returns all docs newest-updated_at first",
+					"status": "passing"
+				},
+				{
+					"id": "rs-migration-adds-column",
+					"file": "src-tauri/src/session_store.rs",
+					"case": "apply_migration adds document_id to sessions and backfills to Untitled doc",
+					"status": "passing"
+				},
+				{
+					"id": "rs-migration-idempotent",
+					"file": "src-tauri/src/session_store.rs",
+					"case": "apply_migration called twice does not error",
+					"status": "passing"
+				},
+				{
+					"id": "rs-doc-sessions-filter",
+					"file": "src-tauri/src/session_store.rs",
+					"case": "get_recent_sessions_for_document returns only sessions for that document, newest first",
+					"status": "passing"
+				}
+			],
+			"manual": [
+				{
+					"id": "m4-schema-idempotent",
+					"case": "cargo tauri dev opens without error on a fresh DB (documents table present)"
+				},
+				{
+					"id": "m4-v1-migration",
+					"case": "opening an existing v1 pressfield.db migrates once; Untitled doc exists; sessions backfilled"
+				}
+			]
+		}
+	}
+}
