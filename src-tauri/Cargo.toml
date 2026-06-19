@@ -3,6 +3,7 @@ name = "pressfield"
 version = "0.1.0"
 description = "A local-first writing app where prose decays during idle time"
 authors = ["Saagar"]
+license = "MIT"
 edition = "2021"
 
 [lib]
