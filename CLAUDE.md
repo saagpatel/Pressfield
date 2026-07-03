@@ -61,3 +61,90 @@ For distribution, finish notarization using `RELEASE-READINESS.md`. For product 
 - Do not put decay rendering logic inside React components; all Canvas distortion lives in `src/canvas/decay.ts`.
 - Do not use `unwrap()` or `expect()` in non-test Rust code; propagate errors with `?` and `thiserror`.
 - Do not use scripted keystroke injection for live visual verification; use screenshots instead.
+
+<!-- portfolio-context:start -->
+# Portfolio Context
+
+## What This Project Is
+
+Local-first Tauri 2 desktop writing app where prose physically decays during idle time: fonts corrupt, glyph edges bleed, words drift, opacity fades, and every pause becomes visible. The adversarial posture is the product. Single-window, zero-network, fully local.
+
+v1 and v2 Arc 1 keep decay non-destructive: Canvas distortion changes what the user sees, while the underlying editor text remains clean. v2 Arc 1 now persists that clean prose in SQLite documents so text survives close and reopen.
+
+## Current State
+
+**v2 Arc 2: Hardcore Mode is code-complete, live-validated, and signed off on `feat/v2-hardcore`.**
+
+Arc 1 delivered:
+
+- P4: `documents` table, v1-to-v2 migration, document CRUD over IPC, per-document stats.
+- P5: autosave, active-document bootstrap, launch hydration, close-to-reopen prose survival.
+- P6: Cmd+O command palette for switching, creating, renaming, and deleting documents.
+
+Arc 2 delivered:
+
+- P7: backend hardcore kill switch, persistence, focus-aware idle clock, and bite cadence.
+- P8: frontend destructive bite consequence, synchronous flush, one-time confirm, and contract tests.
+- P9: live Tauri validation plus final human typing pass.
+
+## Stack
+
+- Tauri 2 + Rust (idle timer, decay state machine, SQLite via `rusqlite`, IPC)
+- React 19 + Vite 7 + TypeScript (editor surface, Canvas 2D overlay, UI)
+- Canvas 2D overlay for decay distortion atop `contenteditable`
+- `rusqlite` for sessions, documents, document bodies, and stats
+- Vitest for frontend tests; `cargo test` for Rust tests
+
+## How To Run
+
+Install dependencies:
+
+```bash
+pnpm install
+```
+
+Run the web shell:
+
+```bash
+pnpm dev
+```
+
+Run the desktop app:
+
+```bash
+pnpm tauri dev
+```
+
+Run frontend checks:
+
+```bash
+pnpm vitest run
+pnpm tsc --noEmit
+pnpm vite build
+```
+
+Run Rust checks:
+
+```bash
+cargo test --manifest-path src-tauri/Cargo.toml
+```
+
+Build the desktop bundle:
+
+```bash
+cargo tauri build
+```
+
+## Known Risks
+
+- Do not implement hardcore mode except as specified in `specs/arc2-hardcore.md` — opt-in, global, OFF by default, and only with the per-bite synchronous flush + undo-defeat in place.
+- Do not make outbound network calls; Pressfield is zero-network and local-only.
+- Do not put decay rendering logic inside React components; all Canvas distortion lives in `src/canvas/decay.ts`.
+- Do not use `unwrap()` or `expect()` in non-test Rust code; propagate errors with `?` and `thiserror`.
+- Do not use scripted keystroke injection for live visual verification; use screenshots instead.
+
+## Next Recommended Move
+
+For distribution, finish notarization using `RELEASE-READINESS.md`. For product work, pick Arc 3 (custom decay-curve editor) from `IMPLEMENTATION-ROADMAP.md` rather than reopening the completed hardcore contract.
+
+<!-- portfolio-context:end -->
