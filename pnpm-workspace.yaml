@@ -3,3 +3,6 @@
 # so Vite/Vitest transforms work and the deps-status check stays clean.
 allowBuilds:
   esbuild: true
+
+overrides:
+  esbuild: ^0.28.1
