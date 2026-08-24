@@ -52,9 +52,9 @@ attached as `receipt-0.1.0.json`. Released from commit `0aca35b` on
   that script's keychain-profile auth was never provisioned — the working credentials
   are the App Store Connect API key (`AuthKey_6NPVH55ZWG.p8`) + issuer ID in the
   Keychain (`asc-radar`/`issuer_id`), which the kit reads at runtime.
-- **Next executable action**: merge `feat-distkit-consume` → `release/public-prep` →
-  `main` (operator merge; the tag already points at the pushed release commit, so this
-  is bookkeeping, not a release blocker).
+- **Source provenance CLOSED 2026-08-24**: the release line landed on `main` via
+  PRs #19/#20; tag `v0.1.0` (commit `0aca35b`) is reachable from `origin/main`.
+  No pending distribution action.
 - **No blocking distribution defect known.** Independent consumer proof (a stranger's
   clean Mac opening the DMG) is UNKNOWN — no clean consumer environment was available;
   local Gatekeeper assessment and Apple's notarization acceptance are the strongest
