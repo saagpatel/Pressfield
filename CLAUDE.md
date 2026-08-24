@@ -38,9 +38,32 @@ Arc 2 delivered:
 - P8: frontend destructive bite consequence, synchronous flush, one-time confirm, and contract tests.
 - P9: live Tauri validation plus final human typing pass.
 
+## Distribution State (closeout 2026-08-24, Foundation Zero Milestone C)
+
+**v0.1.0 is publicly distributed**: signed (Developer ID), Apple-notarized, stapled,
+Gatekeeper-accepted, published at
+https://github.com/saagpatel/Pressfield/releases/tag/v0.1.0 with byte-verified
+provider readback (DMG sha256 `438d5bbd…719d`) and the full distribution receipt
+attached as `receipt-0.1.0.json`. Released from commit `0aca35b` on
+`feat-distkit-consume`.
+
+- **Release path**: `~/Projects/distribution-kit/lanes/macos.sh ./distkit.macos.config.sh`
+  (config in this repo). This supersedes `scripts/notarize-release.sh` for releases;
+  that script's keychain-profile auth was never provisioned — the working credentials
+  are the App Store Connect API key (`AuthKey_6NPVH55ZWG.p8`) + issuer ID in the
+  Keychain (`asc-radar`/`issuer_id`), which the kit reads at runtime.
+- **Next executable action**: merge `feat-distkit-consume` → `release/public-prep` →
+  `main` (operator merge; the tag already points at the pushed release commit, so this
+  is bookkeeping, not a release blocker).
+- **No blocking distribution defect known.** Independent consumer proof (a stranger's
+  clean Mac opening the DMG) is UNKNOWN — no clean consumer environment was available;
+  local Gatekeeper assessment and Apple's notarization acceptance are the strongest
+  layers held.
+- **Decision content**: none pending for distribution. Product work continues at Arc 3.
+
 ## Next Recommended Move
 
-For distribution, finish notarization using `RELEASE-READINESS.md`. For product work, pick Arc 3 (custom decay-curve editor) from `IMPLEMENTATION-ROADMAP.md` rather than reopening the completed hardcore contract.
+For product work, pick Arc 3 (custom decay-curve editor) from `IMPLEMENTATION-ROADMAP.md` rather than reopening the completed hardcore contract. For the next release, bump `version` in `src-tauri/tauri.conf.json` + `DK_VERSION`/`DK_TAG`/`DK_DMG_PATH` in `distkit.macos.config.sh`, then run the kit lane.
 
 ## Key Decisions
 

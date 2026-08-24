@@ -1,58 +1,41 @@
 # Pressfield Release Readiness
 
-_Last checked: 2026-06-07 on `feat/v2-hardcore`._
+_Last checked: 2026-08-24 on `feat-distkit-consume` (supersedes the 2026-06-07 pass)._
 
-## Current decision
+## Current state: RELEASED
 
-Pressfield is ready for local signed artifact testing, but not yet ready for
-external macOS distribution. The remaining release blocker is notarization.
+v0.1.0 is publicly distributed:
+https://github.com/saagpatel/Pressfield/releases/tag/v0.1.0
 
-## Artifact status
+Every distribution layer passed, with evidence in the attached `receipt-0.1.0.json`
+(schema `distkit-receipt/v0`):
 
-- `pnpm tauri build` produces:
-  - `src-tauri/target/release/bundle/macos/Pressfield.app`
-  - `src-tauri/target/release/bundle/dmg/Pressfield_0.1.0_aarch64.dmg`
-- The app and DMG are signed with:
-  `Developer ID Application: SAAGAR I PATEL (3TGZFKFNA4)`.
-- Hardened runtime is enabled.
-- Strict code-sign verification passes for `Pressfield.app`.
-- DMG checksum verification passes.
-- The signed packaged app launches and creates its local SQLite store when run
-  with a disposable `HOME`.
+| Layer | Evidence |
+|---|---|
+| Build | `pnpm tauri build` at commit `0aca35b`, clean tree, version preflight 0.1.0 |
+| Signing | `codesign --verify --deep --strict` pass; Authority = `Developer ID Application: SAAGAR I PATEL (3TGZFKFNA4)`; hardened runtime |
+| Notarization | .app: Apple submission `42626788…` Accepted (via Tauri); DMG: submission `d11378e4…` Accepted |
+| Stapling | app + DMG stapled; `stapler validate` pass on both |
+| Gatekeeper (local) | `spctl --assess` accepted: app (exec) and DMG (open) |
+| Publication | GitHub Release `v0.1.0`, DMG sha256 `438d5bbd10f4c13e0eadedf53712ef8147db2541dd069489f7804b08157b719d` |
+| Provider readback | published asset re-downloaded and byte-compared: match; GitHub's own asset digest matches |
+| Independent consumer | **UNKNOWN** — no clean consumer Mac was available; not claimed |
 
-## Notarization gap
-
-Gatekeeper assessment currently rejects the app as:
-`Unnotarized Developer ID`.
-
-Tauri also reports notarization was skipped because notarization credentials are
-not available in the environment. No keychain profile named `Pressfield` was
-found via `xcrun notarytool`.
-
-## Minimum next steps
-
-1. Store notarization credentials in Keychain with `xcrun notarytool`.
-2. Re-run `pnpm tauri build`.
-3. Run `scripts/notarize-release.sh`.
-
-The script defaults to a Keychain profile named `Pressfield`. Use
-`PRESSFIELD_NOTARY_PROFILE=<name>` to target a different stored profile.
-
-Create the default profile once with one of:
+## Release path (current)
 
 ```sh
-xcrun notarytool store-credentials Pressfield --apple-id <apple-id> --team-id <team-id> --password <app-specific-password>
-xcrun notarytool store-credentials Pressfield --key <api-key-path> --key-id <key-id> --issuer <issuer-id>
+~/Projects/distribution-kit/lanes/macos.sh ./distkit.macos.config.sh
 ```
 
-## Validation commands
+Project-specific values live in `distkit.macos.config.sh`. Credentials: App Store
+Connect API key `AuthKey_6NPVH55ZWG.p8` in `~/.appstoreconnect/private_keys/` +
+issuer ID in the macOS Keychain (`asc-radar` / `issuer_id`), read at runtime and
+never committed. The older `scripts/notarize-release.sh` keychain-profile path was
+never provisioned and is superseded by the kit lane.
 
-```sh
-pnpm tauri build
-codesign --verify --deep --strict --verbose=4 src-tauri/target/release/bundle/macos/Pressfield.app
-codesign -dv --verbose=4 src-tauri/target/release/bundle/macos/Pressfield.app
-hdiutil verify src-tauri/target/release/bundle/dmg/Pressfield_0.1.0_aarch64.dmg
-spctl -a -vvv -t exec src-tauri/target/release/bundle/macos/Pressfield.app
-spctl -a -vvv -t open src-tauri/target/release/bundle/dmg/Pressfield_0.1.0_aarch64.dmg
-scripts/notarize-release.sh
-```
+## Next release checklist
+
+1. Bump `version` in `src-tauri/tauri.conf.json`.
+2. Update `DK_VERSION`, `DK_TAG`, `DK_DMG_PATH` in `distkit.macos.config.sh`; write
+   `RELEASE-NOTES-<version>.md` and point `DK_RELEASE_NOTES_FILE` at it.
+3. Run the kit lane; it refuses to publish anything that fails a verification stage.
