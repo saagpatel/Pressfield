@@ -1,12 +1,10 @@
 # Pressfield
 
-## Overview
-
 Local-first Tauri 2 desktop writing app where prose physically decays during idle time: fonts corrupt, glyph edges bleed, words drift, opacity fades, and every pause becomes visible. The adversarial posture is the product. Single-window, zero-network, fully local.
 
-v1 and v2 Arc 1 keep decay non-destructive: Canvas distortion changes what the user sees, while the underlying editor text remains clean. v2 Arc 1 now persists that clean prose in SQLite documents so text survives close and reopen.
+Decay stays non-destructive through v2 Arc 1: Canvas distortion changes what the user sees while the underlying editor text remains clean. Arc 1 persists that clean prose in SQLite documents, so text survives close and reopen.
 
-## Tech Stack
+## Stack
 
 - Tauri 2 + Rust (idle timer, decay state machine, SQLite via `rusqlite`, IPC)
 - React 19 + Vite 7 + TypeScript (editor surface, Canvas 2D overlay, UI)
@@ -14,52 +12,32 @@ v1 and v2 Arc 1 keep decay non-destructive: Canvas distortion changes what the u
 - `rusqlite` for sessions, documents, document bodies, and stats
 - Vitest for frontend tests; `cargo test` for Rust tests
 
-## Development Conventions
+Install, dev, test, and bundle commands live in the Portfolio Context block below.
 
-- Rust: errors via `thiserror`; no `unwrap()` or `expect()` in non-test code.
+## Conventions
+
+- Rust: surface errors via `thiserror` and propagate with `?`; keep `unwrap()` and `expect()` to test code.
 - IPC: Tauri commands emit typed events and structs, never raw JSON blobs.
-- Canvas: all decay rendering stays isolated in `src/canvas/decay.ts`; React may orchestrate state but must not own decay math/rendering.
+- Canvas: all decay math and rendering stay isolated in `src/canvas/decay.ts`. React may orchestrate state but keeps decay rendering out of components.
 - TypeScript: prefer `unknown` plus narrowing over `any`.
-- Conventional commits: `feat:`, `fix:`, `chore:`, `docs:`. Small logical units. Feature branches only.
+- Conventional commits (`feat:`, `fix:`, `chore:`, `docs:`), small logical units, feature branches only.
+- Pressfield is zero-network and local-only: keep outbound network calls out of the app.
+- Hardcore mode ships only as specified in `specs/arc2-hardcore.md` — opt-in, global, OFF by default, and only with the per-bite synchronous flush plus undo-defeat in place.
+- Verify live visuals with screenshots; scripted keystroke injection is unreliable for this surface.
 
-## Current Phase
+## State
 
-**v2 Arc 2: Hardcore Mode is code-complete, live-validated, and signed off on `feat/v2-hardcore`.**
+v2 Arc 2 (Hardcore Mode) is code-complete, live-validated, and signed off on `feat/v2-hardcore`.
 
-Arc 1 delivered:
+- Arc 1 — P4: `documents` table, v1-to-v2 migration, document CRUD over IPC, per-document stats. P5: autosave, active-document bootstrap, launch hydration, close-to-reopen prose survival. P6: Cmd+O command palette for switching, creating, renaming, and deleting documents.
+- Arc 2 — P7: backend hardcore kill switch, persistence, focus-aware idle clock, and bite cadence. P8: frontend destructive bite consequence, synchronous flush, one-time confirm, and contract tests. P9: live Tauri validation plus final human typing pass.
 
-- P4: `documents` table, v1-to-v2 migration, document CRUD over IPC, per-document stats.
-- P5: autosave, active-document bootstrap, launch hydration, close-to-reopen prose survival.
-- P6: Cmd+O command palette for switching, creating, renaming, and deleting documents.
+## Distribution (closeout 2026-08-24, Foundation Zero Milestone C)
 
-Arc 2 delivered:
+v0.1.0 is publicly distributed: signed (Developer ID), Apple-notarized, stapled, Gatekeeper-accepted, published at https://github.com/saagpatel/Pressfield/releases/tag/v0.1.0 with byte-verified provider readback (DMG sha256 `438d5bbd…719d`) and the full distribution receipt attached as `receipt-0.1.0.json`. Released from commit `0aca35b` on `feat-distkit-consume`. Source provenance closed: the release line landed on `main` via PRs #19/#20, and tag `v0.1.0` is reachable from `origin/main`. No pending distribution action, and no blocking distribution defect known.
 
-- P7: backend hardcore kill switch, persistence, focus-aware idle clock, and bite cadence.
-- P8: frontend destructive bite consequence, synchronous flush, one-time confirm, and contract tests.
-- P9: live Tauri validation plus final human typing pass.
-
-## Distribution State (closeout 2026-08-24, Foundation Zero Milestone C)
-
-**v0.1.0 is publicly distributed**: signed (Developer ID), Apple-notarized, stapled,
-Gatekeeper-accepted, published at
-https://github.com/saagpatel/Pressfield/releases/tag/v0.1.0 with byte-verified
-provider readback (DMG sha256 `438d5bbd…719d`) and the full distribution receipt
-attached as `receipt-0.1.0.json`. Released from commit `0aca35b` on
-`feat-distkit-consume`.
-
-- **Release path**: `~/Projects/distribution-kit/lanes/macos.sh ./distkit.macos.config.sh`
-  (config in this repo). This supersedes `scripts/notarize-release.sh` for releases;
-  that script's keychain-profile auth was never provisioned — the working credentials
-  are the App Store Connect API key (`AuthKey_6NPVH55ZWG.p8`) + issuer ID in the
-  Keychain (`asc-radar`/`issuer_id`), which the kit reads at runtime.
-- **Source provenance CLOSED 2026-08-24**: the release line landed on `main` via
-  PRs #19/#20; tag `v0.1.0` (commit `0aca35b`) is reachable from `origin/main`.
-  No pending distribution action.
-- **No blocking distribution defect known.** Independent consumer proof (a stranger's
-  clean Mac opening the DMG) is UNKNOWN — no clean consumer environment was available;
-  local Gatekeeper assessment and Apple's notarization acceptance are the strongest
-  layers held.
-- **Decision content**: none pending for distribution. Product work continues at Arc 3.
+- Release path: `~/Projects/distribution-kit/lanes/macos.sh ./distkit.macos.config.sh` (config in this repo). This supersedes `scripts/notarize-release.sh` for releases; that script's keychain-profile auth was never provisioned. The working credentials are the App Store Connect API key (`AuthKey_6NPVH55ZWG.p8`) plus issuer ID in the Keychain (`asc-radar`/`issuer_id`), which the kit reads at runtime.
+- Independent consumer proof (a stranger's clean Mac opening the DMG) is UNKNOWN — no clean consumer environment was available. Local Gatekeeper assessment and Apple's notarization acceptance are the strongest layers held.
 
 ## Next Recommended Move
 
@@ -76,14 +54,6 @@ For product work, pick Arc 3 (custom decay-curve editor) from `IMPLEMENTATION-RO
 | Document UX | Cmd+O command palette | Keyboard-first document switching without cluttering the writing surface |
 | Hardcore mode | In scope (Arc 2) per `specs/arc2-hardcore.md` — discrete trailing destruction past full decay; opt-in, global, OFF by default | Permanent text loss is an explicit, approved ethical/UX contract |
 | Canvas strategy | Overlay atop `contenteditable`, not replacement | Native editing, selection, IME, and undo remain browser-owned |
-
-## Do NOT
-
-- Do not implement hardcore mode except as specified in `specs/arc2-hardcore.md` — opt-in, global, OFF by default, and only with the per-bite synchronous flush + undo-defeat in place.
-- Do not make outbound network calls; Pressfield is zero-network and local-only.
-- Do not put decay rendering logic inside React components; all Canvas distortion lives in `src/canvas/decay.ts`.
-- Do not use `unwrap()` or `expect()` in non-test Rust code; propagate errors with `?` and `thiserror`.
-- Do not use scripted keystroke injection for live visual verification; use screenshots instead.
 
 <!-- portfolio-context:start -->
 # Portfolio Context
