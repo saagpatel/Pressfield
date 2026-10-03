@@ -6,7 +6,7 @@ The app is built with Tauri 2, Rust, React, TypeScript, Vite, and SQLite via `ru
 
 ## Current State
 
-v2 Arc 1, persistence, is code-complete on `feat/v2-persistence` at `660816a`.
+v2 Arc 2, hardcore mode, is implemented alongside Arc 1 persistence.
 
 Arc 1 delivered:
 
@@ -28,11 +28,11 @@ Outstanding Arc 1 caveat:
 
 ## Next Arc
 
-Arc 2 is hardcore mode planning. It must start with design, not code.
+Arc 3 is the custom decay-curve editor described in `IMPLEMENTATION-ROADMAP.md`.
 
-Hardcore mode would permanently destroy text after decay crosses a threshold, which reverses the v1/Arc 1 invariant that decay is visual and non-destructive. Before implementation, resolve the save/decay contract: whether autosave persists destroyed text, preserved original text, or a deliberately consented irreversible state.
+Hardcore mode permanently removes trailing words in discrete bites while decay is held at full, reversing the v1/Arc 1 invariant that decay is visual and non-destructive. It is opt-in, global, and OFF by default; each bite immediately invokes and awaits `save_document` with the surviving text instead of waiting for debounced autosave.
 
-See `ARC2-HANDOFF.md` before touching Arc 2.
+See `specs/arc2-hardcore.md` before changing Arc 2; `ARC2-HANDOFF.md` records the earlier planning state.
 
 ## Development and verification
 
@@ -57,7 +57,8 @@ pnpm test src/__tests__/wordCount.test.ts
 cargo test --locked --manifest-path src-tauri/Cargo.toml round_trip_session_with_keystrokes
 ```
 
-The frontend tests use Node or happy-dom and mock native IPC where needed. Rust
+The frontend tests use Node or happy-dom and test helpers and components without
+running native IPC. Rust
 store tests use in-memory databases, with one WAL test using a temporary file;
 these test commands do not launch the app or open the user's prose database.
 Choose the affected test file or Rust name filter when changing another area.
