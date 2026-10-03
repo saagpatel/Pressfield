@@ -34,45 +34,79 @@ Hardcore mode would permanently destroy text after decay crosses a threshold, wh
 
 See `ARC2-HANDOFF.md` before touching Arc 2.
 
-## Commands
+## Development and verification
 
-Install dependencies:
+Run all commands below from the repository root. CI uses Node.js 22 and pnpm 10;
+use those versions to reproduce its environment. The repository does not declare
+support for other versions. Install the locked frontend dependencies:
 
 ```bash
-pnpm install
+pnpm install --frozen-lockfile
 ```
 
-Run the web shell:
+Rust checks and native development also require Rust/Cargo and the
+[Tauri 2 platform prerequisites](https://v2.tauri.app/start/prerequisites/).
+For macOS desktop development, install Xcode Command Line Tools. Linux test
+prerequisites are listed in [.github/workflows/ci.yml](.github/workflows/ci.yml).
+The app targets macOS; a green Linux CI run does not verify macOS packaging.
+
+For a small local fixture check, run a focused frontend file or Rust test:
+
+```bash
+pnpm test src/__tests__/wordCount.test.ts
+cargo test --locked --manifest-path src-tauri/Cargo.toml round_trip_session_with_keystrokes
+```
+
+The frontend tests use Node or happy-dom and mock native IPC where needed. Rust
+store tests use in-memory databases, with one WAL test using a temporary file;
+these test commands do not launch the app or open the user's prose database.
+Choose the affected test file or Rust name filter when changing another area.
+
+For the broader local checks:
+
+```bash
+pnpm test
+cargo test --locked --manifest-path src-tauri/Cargo.toml
+pnpm exec tsc --noEmit
+pnpm build
+```
+
+`pnpm build` runs TypeScript and the Vite production build. CI runs the frontend
+and Rust tests plus TypeScript; it does not build a desktop bundle. No dedicated
+lint or format script is configured. The test counts above are historical
+receipts, not assertions about the current checkout.
+
+For UI changes, inspect the changed behavior in the web shell as applicable:
 
 ```bash
 pnpm dev
 ```
 
-Run the desktop app:
+Vite uses port 1420 and fails if it is occupied. The web shell has no native Tauri
+IPC; browser-only checks cannot verify persistence, native events or desktop
+close/reopen behavior. Verify those behaviors in the native app when relevant:
 
 ```bash
 pnpm tauri dev
 ```
 
-Run frontend checks:
+Native runs write to `~/.pressfield/pressfield.db`. Use a disposable OS account
+and scratch documents for desktop/manual checks; keep hardcore mode OFF unless
+specifically testing its opt-in destruction contract on disposable text. For
+editor, persistence or theme changes, manually check type/close/reopen, document
+switching and both themes. Use screenshots or hand control, not scripted
+keystroke injection. Pure documentation changes do not require a browser pass.
+
+Desktop packaging is a separate, optional macOS release lane:
 
 ```bash
-pnpm vitest run
-pnpm tsc --noEmit
-pnpm vite build
+pnpm tauri build
 ```
 
-Run Rust checks:
-
-```bash
-cargo test --manifest-path src-tauri/Cargo.toml
-```
-
-Build the desktop bundle:
-
-```bash
-cargo tauri build
-```
+This uses the repository's npm Tauri CLI and the configured macOS signing
+identity; it is not a routine smoke check. For distribution, follow the current
+release references in [CLAUDE.md](CLAUDE.md#distribution-closeout-2026-08-24-foundation-zero-milestone-c)
+and [RELEASE-NOTES-0.1.0.md](RELEASE-NOTES-0.1.0.md).
 
 ## Guardrails
 
