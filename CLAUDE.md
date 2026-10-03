@@ -18,7 +18,7 @@ Install, dev, test, and bundle commands live in the Portfolio Context block belo
 
 - Rust: surface errors via `thiserror` and propagate with `?`; keep `unwrap()` and `expect()` to test code.
 - IPC: Tauri commands emit typed events and structs, never raw JSON blobs.
-- Canvas: all decay math and rendering stay isolated in `src/canvas/decay.ts`. React may orchestrate state but keeps decay rendering out of components.
+- Canvas: distortion rendering stays isolated in `src/canvas/decay.ts`, with word geometry in `src/canvas/wordBoxes.ts`. The authoritative decay curve lives in `src-tauri/src/decay.rs`, mirrored with interpolation helpers in `src/utils/decayMath.ts`. React may orchestrate state but keeps decay rendering out of components.
 - TypeScript: prefer `unknown` plus narrowing over `any`.
 - Conventional commits (`feat:`, `fix:`, `chore:`, `docs:`), small logical units, feature branches only.
 - Pressfield is zero-network and local-only: keep outbound network calls out of the app.
@@ -138,6 +138,6 @@ cargo tauri build
 
 ## Next Recommended Move
 
-For distribution, finish notarization using `RELEASE-READINESS.md`. For product work, pick Arc 3 (custom decay-curve editor) from `IMPLEMENTATION-ROADMAP.md` rather than reopening the completed hardcore contract.
+For distribution, follow the next release checklist in `RELEASE-READINESS.md`; that file records v0.1.0 notarization as complete. For product work, pick Arc 3 (custom decay-curve editor) from `IMPLEMENTATION-ROADMAP.md` rather than reopening the completed hardcore contract.
 
 <!-- portfolio-context:end -->
